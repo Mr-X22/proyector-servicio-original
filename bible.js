@@ -1,7 +1,7 @@
 // bible.js — Módulo Biblia RVR60
 // Descarga los datos de la Biblia una sola vez y los guarda en IndexedDB para uso offline.
 
-const BIBLE_URL = 'https://cdn.jsdelivr.net/gh/thiagobodruk/bible@master/json/es_rvr.json';
+const BIBLE_URL = './bible_rv1960.json';
 
 const bible = {
   data: null,        // array de libros
@@ -62,13 +62,7 @@ const bible = {
   },
 
   _normalize(raw) {
-    // Si ya tiene el formato correcto, usarlo tal cual
-    if (Array.isArray(raw) && raw[0] && raw[0].chapters) {
-      return raw.map((book, i) => ({
-        name: this.BOOK_NAMES[i] || book.book || book.name || `Libro ${i + 1}`,
-        chapters: book.chapters,
-      }));
-    }
+    // El JSON local ya tiene el formato {name, chapters} correcto
     return raw;
   },
 
