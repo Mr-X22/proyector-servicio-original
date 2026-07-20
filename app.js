@@ -391,19 +391,38 @@ function renderBibleSection() {
   });
 }
 
+const MAX_VERSES = 3;
+
 function renderBibleBrowser() {
   const editor = document.getElementById('editor');
   editor.innerHTML=`
-    <div class="editor-toolbar"><h2>Biblia — Reina Valera 1960</h2></div>
-    <div class="bible-nav-bar">
-      <select class="bible-select" id="bibleBook"></select>
-      <select class="bible-select" id="bibleChapter" style="max-width:120px;"></select>
-    </div>
-    <p class="bible-range-hint">Toca un versículo para seleccionarlo. Selecciona varios para proyectarlos juntos.</p>
-    <div class="bible-verse-list" id="bibleVerseList"></div>
-    <div class="btn-row">
-      <button class="btn btn-primary bible-proj-btn" id="btnProjBible" style="width:100%;">Proyectar selección</button>
-      <button class="btn btn-ghost" id="btnAddBibleToList">+ A la lista</button>
+    <div style="display:flex;flex-direction:column;height:100%;gap:0;overflow:hidden;">
+      <div class="editor-toolbar" style="flex-shrink:0;">
+        <h2>Biblia — Reina Valera 1960</h2>
+      </div>
+
+      <!-- Selector de libro -->
+      <div class="bible-top-bar" style="flex-shrink:0;">
+        <select class="bible-select" id="bibleBook"></select>
+      </div>
+
+      <!-- Grid de capítulos -->
+      <div style="flex-shrink:0;margin-bottom:10px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);font-weight:700;margin-bottom:6px;">Capítulo</div>
+        <div class="bible-chap-grid" id="bibleChapGrid"></div>
+      </div>
+
+      <!-- Barra de proyección siempre visible -->
+      <div class="bible-proj-bar" style="flex-shrink:0;">
+        <div class="bible-sel-counter"><span id="bibleSelCount">0</span>/${MAX_VERSES} versículos seleccionados</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="btnAddBibleToList">+ Lista</button>
+          <button class="bible-proj-action" id="btnProjBible" disabled>Proyectar</button>
+        </div>
+      </div>
+
+      <!-- Lista de versículos -->
+      <div class="bible-verse-list" id="bibleVerseList"></div>
     </div>`;
 
   // Poblar libros
@@ -419,23 +438,26 @@ function renderBibleBrowser() {
     }
     bookSel.appendChild(og);
   });
-  bookSel.addEventListener('change',()=>{ bibleState.bookIndex=parseInt(bookSel.value); bibleState.chapterIndex=0; bibleState.selectedVerses.clear(); renderBibleChapters(); renderBibleVerses(); });
+  bookSel.addEventListener('change',()=>{
+    bibleState.bookIndex=parseInt(bookSel.value);
+    bibleState.chapterIndex=0;
+    bibleState.selectedVerses.clear();
+    renderBibleChapGrid();
+    renderBibleVerses();
+    updateBibleProjBar();
+  });
 
-  renderBibleChapters();
+  renderBibleChapGrid();
   renderBibleVerses();
 
   document.getElementById('btnProjBible').addEventListener('click',()=>{
-    if(!bibleState.selectedVerses.size){ toast('Selecciona al menos un versículo.'); return; }
-    const sorted=[...bibleState.selectedVerses].sort((a,b)=>a-b);
-    const payload=bible.buildVersePayload(bibleState.bookIndex,bibleState.chapterIndex,sorted[0],sorted[sorted.length-1]);
-    state.liveRef={ collection:'biblia', id:'bible-current', slideIndex:0, snapshot:{ title:payload.reference, slides:[payload.text], reference:payload.reference, text:payload.text } };
-    sendCurrentSlide(); renderPreview(); updateLiveBadge(true); highlightTimelineLive();
+    if(!bibleState.selectedVerses.size) return;
+    projectBibleSelection();
   });
 
   document.getElementById('btnAddBibleToList').addEventListener('click',()=>{
     if(!bibleState.selectedVerses.size){ toast('Selecciona al menos un versículo.'); return; }
-    const sorted=[...bibleState.selectedVerses].sort((a,b)=>a-b);
-    const payload=bible.buildVersePayload(bibleState.bookIndex,bibleState.chapterIndex,sorted[0],sorted[sorted.length-1]);
+    const payload=buildBiblePayload();
     const list=getCurrentList();
     if(!list){ toast('Crea una lista de servicio primero.'); return; }
     list.items.push({ type:'citas', refId:'bible-'+uid(), title:payload.reference, biblePayload:payload });
@@ -443,36 +465,74 @@ function renderBibleBrowser() {
   });
 }
 
-function renderBibleChapters() {
-  const chSel=document.getElementById('bibleChapter');
-  if(!chSel)return;
-  const book=bible.getBook(bibleState.bookIndex);
-  if(!book)return;
-  chSel.innerHTML='';
+function buildBiblePayload() {
+  const sorted=[...bibleState.selectedVerses].sort((a,b)=>a-b);
+  return bible.buildVersePayload(bibleState.bookIndex,bibleState.chapterIndex,sorted[0],sorted[sorted.length-1]);
+}
+
+function projectBibleSelection() {
+  const payload=buildBiblePayload();
+  state.liveRef={ collection:'biblia', id:'bible-current', slideIndex:0,
+    snapshot:{ title:payload.reference, slides:[payload.text], reference:payload.reference, text:payload.text } };
+  sendCurrentSlide(); renderPreview(); updateLiveBadge(true); highlightTimelineLive();
+}
+
+function updateBibleProjBar() {
+  const count = bibleState.selectedVerses.size;
+  const countEl = document.getElementById('bibleSelCount');
+  const btn = document.getElementById('btnProjBible');
+  if(countEl) countEl.textContent = count;
+  if(btn) {
+    btn.disabled = count === 0;
+    btn.textContent = count > 0 ? `Proyectar (${count})` : 'Proyectar';
+  }
+}
+
+function renderBibleChapGrid() {
+  const grid = document.getElementById('bibleChapGrid');
+  if(!grid) return;
+  const book = bible.getBook(bibleState.bookIndex);
+  if(!book) return;
+  grid.innerHTML='';
   book.chapters.forEach((_,i)=>{
-    const o=document.createElement('option');
-    o.value=i; o.textContent=`Capítulo ${i+1}`;
-    if(i===bibleState.chapterIndex) o.selected=true;
-    chSel.appendChild(o);
+    const btn = document.createElement('button');
+    btn.className = 'bible-chap-btn' + (i===bibleState.chapterIndex?' active':'');
+    btn.textContent = i+1;
+    btn.addEventListener('click',()=>{
+      bibleState.chapterIndex=i;
+      bibleState.selectedVerses.clear();
+      grid.querySelectorAll('.bible-chap-btn').forEach((b,j)=>b.classList.toggle('active',j===i));
+      renderBibleVerses();
+      updateBibleProjBar();
+    });
+    grid.appendChild(btn);
   });
-  chSel.addEventListener('change',()=>{ bibleState.chapterIndex=parseInt(chSel.value); bibleState.selectedVerses.clear(); renderBibleVerses(); });
 }
 
 function renderBibleVerses() {
   const list=document.getElementById('bibleVerseList');
-  if(!list)return;
+  if(!list) return;
   const verses=bible.getChapter(bibleState.bookIndex,bibleState.chapterIndex);
   list.innerHTML='';
   verses.forEach((text,i)=>{
+    const isSelected = bibleState.selectedVerses.has(i);
+    const isDisabled = !isSelected && bibleState.selectedVerses.size >= MAX_VERSES;
     const item=el(`
-      <div class="bible-verse-item ${bibleState.selectedVerses.has(i)?'selected':''}">
+      <div class="bible-verse-item ${isSelected?'selected':''} ${isDisabled?'disabled':''}">
         <span class="bible-verse-num">${i+1}</span>
         <span class="bible-verse-text">${esc(text)}</span>
       </div>`);
     item.addEventListener('click',()=>{
-      if(bibleState.selectedVerses.has(i)) bibleState.selectedVerses.delete(i);
-      else bibleState.selectedVerses.add(i);
-      item.classList.toggle('selected',bibleState.selectedVerses.has(i));
+      if(bibleState.selectedVerses.has(i)){
+        bibleState.selectedVerses.delete(i);
+      } else {
+        if(bibleState.selectedVerses.size>=MAX_VERSES){
+          toast(`Máximo ${MAX_VERSES} versículos a la vez.`); return;
+        }
+        bibleState.selectedVerses.add(i);
+      }
+      updateBibleProjBar();
+      renderBibleVerses();
     });
     list.appendChild(item);
   });

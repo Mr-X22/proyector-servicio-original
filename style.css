@@ -166,22 +166,36 @@ textarea.field-input{resize:vertical;font-family:var(--font-mono);line-height:1.
 .tl-empty{color:var(--text-faint);font-size:12px;display:flex;align-items:center;padding:0 6px;}
 
 /* ── BIBLE MODULE ── */
-.bible-browser{display:flex;flex-direction:column;height:100%;gap:0;}
-.bible-nav-bar{display:flex;gap:8px;padding:0 0 14px;flex-shrink:0;flex-wrap:wrap;}
-.bible-select{flex:1;min-width:120px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 10px;font-size:13px;}
+.bible-browser{display:flex;flex-direction:column;height:100%;gap:0;min-height:0;}
+.bible-top-bar{flex-shrink:0;display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.bible-select{flex:1;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 10px;font-size:13px;}
 .bible-select:focus{outline:none;border-color:var(--amber-dim);}
-.bible-verse-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px;}
-.bible-verse-item{padding:8px 12px;border-radius:6px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;border:1px solid transparent;transition:all .1s;}
+
+/* Grid de capítulos estilo Holyrics */
+.bible-chap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:5px;margin-bottom:12px;flex-shrink:0;}
+.bible-chap-btn{height:36px;border:1px solid var(--border);border-radius:6px;background:var(--panel-raised);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .1s;display:flex;align-items:center;justify-content:center;}
+.bible-chap-btn:hover{border-color:var(--amber-dim);color:var(--text);}
+.bible-chap-btn.active{background:var(--amber);border-color:var(--amber);color:#1a1005;}
+
+/* Barra de proyección fija arriba */
+.bible-proj-bar{flex-shrink:0;background:var(--panel-raised);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.bible-sel-counter{font-size:12px;color:var(--text-muted);}
+.bible-sel-counter span{color:var(--amber);font-weight:700;}
+.bible-proj-action{background:var(--amber);color:#1a1005;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:filter .12s;white-space:nowrap;}
+.bible-proj-action:hover{filter:brightness(1.1);}
+.bible-proj-action:disabled{background:var(--border);color:var(--text-faint);cursor:not-allowed;}
+
+/* Lista de versículos */
+.bible-verse-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;min-height:0;}
+.bible-verse-item{padding:8px 10px;border-radius:6px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;border:1px solid transparent;transition:all .1s;}
 .bible-verse-item:hover{background:var(--panel-raised);}
-.bible-verse-item.selected{background:var(--panel-raised);border-color:var(--amber-dim);}
-.bible-verse-num{font-family:var(--font-mono);font-size:11px;color:var(--amber);font-weight:700;flex-shrink:0;min-width:22px;margin-top:1px;}
+.bible-verse-item.selected{background:var(--panel-raised);border-color:var(--amber);box-shadow:inset 3px 0 0 var(--amber);}
+.bible-verse-item.disabled{opacity:.4;cursor:not-allowed;}
+.bible-verse-num{font-family:var(--font-mono);font-size:12px;color:var(--amber);font-weight:700;flex-shrink:0;min-width:24px;margin-top:2px;}
 .bible-verse-text{font-size:13px;line-height:1.55;}
-.bible-proj-btn{margin-top:12px;width:100%;}
-.bible-range-hint{font-size:11px;color:var(--text-faint);margin-bottom:8px;}
 .bible-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--text-muted);}
 .bible-loading .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
-.bible-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);padding:10px 4px 4px;font-weight:700;}
 
 /* ── TOGGLE GROUP ── */
 .toggle-group{display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;width:fit-content;margin-bottom:12px;}
