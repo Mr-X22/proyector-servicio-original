@@ -233,6 +233,12 @@ textarea.field-input{resize:vertical;font-family:var(--font-mono);line-height:1.
 .hidden{display:none !important;}
 .mobile-proj-bar{display:none;}
 
+/* Cuando la biblioteca está oculta (modo Biblia), el editor ocupa su espacio */
+.library[style*="display: none"] ~ .editor,
+.library[style*="display:none"] ~ .editor {
+  grid-column: 2 / 4;
+}
+
 /* ═══════════════════════════════════════════
    RESPONSIVE — TABLET (768px – 1199px)
    ═══════════════════════════════════════════ */

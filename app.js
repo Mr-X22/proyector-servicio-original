@@ -96,6 +96,9 @@ document.querySelectorAll('.rail-btn[data-section]').forEach(btn=>{
     btn.classList.add('active');
     state.section = btn.dataset.section;
     state.selectedId = null;
+    // Restaurar columna de biblioteca si venimos de Biblia
+    document.querySelector('.library').style.display='';
+    document.getElementById('editor').style.gridColumn='';
     if (state.section==='audio') renderAudioSection();
     else if (state.section==='biblia') renderBibleSection();
     else { renderLibrary(); renderEditorEmpty(); }
@@ -376,11 +379,9 @@ function renderVerseEditor(item) {
 const bibleState = { bookIndex:0, chapterIndex:0, selectedVerses:new Set() };
 
 function renderBibleSection() {
-  document.getElementById('libTitle').textContent='Biblia RVR60';
-  document.getElementById('libCount').textContent='';
-  document.getElementById('btnAdd').style.display='none';
-  document.getElementById('libSearch').style.display='none';
-  document.getElementById('libList').innerHTML='';
+  // Ocultar la columna de biblioteca cuando estamos en Biblia
+  document.querySelector('.library').style.display='none';
+  document.getElementById('editor').style.gridColumn='2/4';
 
   const editor = document.getElementById('editor');
   editor.innerHTML=`<div class="bible-loading" id="bibleLoading"><div class="spinner"></div><span id="bibleLoadMsg">Cargando Biblia...</span></div>`;
@@ -657,9 +658,22 @@ function clearProjection(){
 }
 document.getElementById('btnClearProj').addEventListener('click',clearProjection);
 
+// Calcula el tamaño de fuente automáticamente según la longitud del texto
+function autoFontSize(text) {
+  const len = (text || '').length;
+  if (len <= 80)  return '6.5vw';
+  if (len <= 160) return '5.2vw';
+  if (len <= 260) return '4.2vw';
+  if (len <= 380) return '3.4vw';
+  return '2.8vw';
+}
+
 function sendCurrentSlide(){
   if(!state.liveRef){ channel.postMessage({type:'content',payload:{kind:'blank'}}); publishRemoteState(); updateMobileProjBar(); return; }
-  channel.postMessage({type:'content',payload:buildPayloadFromLive(),font:projFont,size:projSize});
+  const payload = buildPayloadFromLive();
+  // Tamaño automático basado en el contenido (no editable por el usuario)
+  const autoSize = payload.kind !== 'image' ? autoFontSize(payload.text) : projSize;
+  channel.postMessage({type:'content',payload,font:projFont,size:autoSize});
   publishRemoteState(); updateMobileProjBar();
 }
 
@@ -683,7 +697,8 @@ function renderPreview(){
     const s=slides[slideIndex]||slides[0];
     text=s.isTitle?s.title+(s.author?`\n${s.author}`:''):s.text;
   } else { text=(snapshot.text||snapshot.slides?.[slideIndex]||'')+(snapshot.reference?`\n— ${snapshot.reference}`:''); }
-  frame.innerHTML=`<span class="ph-text">${esc(text)}</span>`;
+  const textColor = projTheme === 'light' ? '#111' : '#fff';
+  frame.innerHTML=`<span class="ph-text" style="color:${textColor}">${esc(text)}</span>`;
   if(kind==='song'&&totalSlides>1){ slideNav.classList.remove('hidden'); document.getElementById('slideCounter').textContent=`${slideIndex+1}/${totalSlides}`; }
   else slideNav.classList.add('hidden');
 }
@@ -712,8 +727,6 @@ document.getElementById('btnToggleTheme').addEventListener('click',()=>{
   // Actualizar preview frame
   const frame=document.getElementById('projFrame');
   frame.style.background=projTheme==='light'?'#fff':'#000';
-  const txt=frame.querySelector('.ph-text');
-  if(txt) txt.style.color=projTheme==='light'?'#111':'#fff';
   renderPreview();
 });
 document.getElementById('projFont').addEventListener('change',e=>{
