@@ -22,36 +22,36 @@ const bible = {
 
   OT_COUNT: 39,  // primeros 39 libros = Antiguo Testamento
 
+  // Versión del archivo de la Biblia — cambiar cuando se actualice el JSON
+  CACHE_VERSION: 'rv1960-local-v1',
+
   async load(onProgress) {
     if (this.loaded) return true;
     if (this.loading) return false;
     this.loading = true;
 
-    // Intentar desde caché IndexedDB
+    // Intentar desde caché IndexedDB solo si es la versión correcta
     try {
       const cached = await bibleCache.get();
-      if (cached && Array.isArray(cached) && cached.length >= 66) {
-        this.data = cached;
+      if (cached && cached.version === this.CACHE_VERSION && Array.isArray(cached.data) && cached.data.length >= 66) {
+        this.data = cached.data;
         this.loaded = true;
         this.loading = false;
         return true;
       }
     } catch (e) {}
 
-    // Descargar
+    // Cargar desde el archivo local incluido en la app
     try {
-      if (onProgress) onProgress('Descargando Biblia RVR60...');
+      if (onProgress) onProgress('Cargando Biblia RVR60...');
       const res = await fetch(BIBLE_URL);
-      if (!res.ok) throw new Error('Error de red');
+      if (!res.ok) throw new Error('Error al cargar el archivo de la Biblia');
       const raw = await res.json();
-
-      // Normalizar estructura del JSON
-      // El formato de thiagobodruk es: [{book, chapters: [[v1,v2,...], ...]}]
       this.data = this._normalize(raw);
 
-      // Guardar en caché
-      if (onProgress) onProgress('Guardando para uso offline...');
-      await bibleCache.set(this.data);
+      // Guardar en caché con versión
+      if (onProgress) onProgress('Preparando para uso offline...');
+      await bibleCache.set({ version: this.CACHE_VERSION, data: this.data });
       this.loaded = true;
       this.loading = false;
       return true;
