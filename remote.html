@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
-<title>Control Remoto — Proyector de Servicio</title>
+<title>Control Remoto — LiteWorship</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
 <style>
@@ -131,8 +131,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
   <!-- HEADER -->
   <div class="header">
     <div style="display:flex;align-items:center;gap:10px;">
-      <div class="logo">P</div>
-      <span style="font-size:13px;font-weight:600;">Proyector de Servicio</span>
+      <div class="logo">LW</div>
+      <span style="font-size:13px;font-weight:600;">LiteWorship</span>
     </div>
     <div class="header-right">
       <div class="live-badge"><span class="dot" id="dotLive"></span><span id="liveText">SIN SEÑAL</span></div>
@@ -187,7 +187,7 @@ function connectMQTT() {
     useSSL: true, keepAliveInterval: 30,
     onSuccess: function() {
       setConn(true);
-      mqttClient.subscribe('proyector/' + room + '/state');
+      mqttClient.subscribe('liteworship/' + room + '/state');
       sendCmd('request-state');
     },
     onFailure: function() { setConn(false); setTimeout(connectMQTT, 4000); }
@@ -204,7 +204,7 @@ function sendCmd(action, extra) {
   if (!mqttClient || !mqttClient.isConnected()) return;
   const cmd = Object.assign({ type:'cmd', action, ts:Date.now() }, extra||{});
   const msg = new Paho.Message(JSON.stringify(cmd));
-  msg.destinationName = 'proyector/' + room + '/cmd';
+  msg.destinationName = 'liteworship/' + room + '/cmd';
   try { mqttClient.send(msg); } catch(_) {}
 }
 

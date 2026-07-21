@@ -1,4 +1,4 @@
-// app.js v3 — Proyector de Servicio
+// app.js v3 — LiteWorship
 const channel = new BroadcastChannel('proyector-sync');
 let projectorWindow = null;
 let projTheme = 'dark';
@@ -50,7 +50,7 @@ function showFolderGate(mode) {
     document.body.appendChild(overlay);
   }
   const msgs = {
-    new: { icon:'📁', title:'Bienvenido a Proyector de Servicio', body:'Para empezar, elige o crea la carpeta donde se guardarán tus datos.', btn:'Elegir mi carpeta de datos' },
+    new: { icon:'📁', title:'Bienvenido a LiteWorship', body:'Para empezar, elige o crea la carpeta donde se guardarán tus datos.', btn:'Elegir mi carpeta de datos' },
     'needs-permission': { icon:'🔑', title:'Un momento antes de continuar', body:'Chrome necesita confirmar el acceso a tu carpeta de datos. Solo toma un clic.', btn:'Conceder acceso' },
     deleted: { icon:'📂', title:'No encontramos tu carpeta de datos', body:'La carpeta fue borrada o movida. Elige una nueva para continuar.', btn:'Elegir carpeta de datos' },
   };
@@ -857,10 +857,10 @@ document.getElementById('btnNextSlideMobile').addEventListener('click',()=>docum
 document.getElementById('btnClearMobile').addEventListener('click',clearProjection);
 
 // ── CONTROL REMOTO MQTT ──
-const REMOTE_KEY='proyector-remote-state';
+const REMOTE_KEY='liteworship-remote-state';
 let mqttClient=null,remoteConnected=false,_remoteRoom=null,_onRemoteMessage=null;
 
-function getRemoteRoom(){ let r=localStorage.getItem('proyector-room'); if(!r){ r='ps-'+Math.random().toString(36).slice(2,10); localStorage.setItem('proyector-room',r); } return r; }
+function getRemoteRoom(){ let r=localStorage.getItem('liteworship-room'); if(!r){ r='ps-'+Math.random().toString(36).slice(2,10); localStorage.setItem('liteworship-room',r); } return r; }
 
 function connectRemoteWS(room,onMessage){
   _remoteRoom=room; _onRemoteMessage=onMessage;
@@ -871,7 +871,7 @@ function connectRemoteWS(room,onMessage){
   mqttClient.onConnectionLost=()=>{ remoteConnected=false; setTimeout(()=>connectRemoteWS(room,onMessage),3000); };
   mqttClient.onMessageArrived=msg=>{ try{ onMessage(JSON.parse(msg.payloadString)); }catch(_){} };
   mqttClient.connect({ useSSL:true, keepAliveInterval:30,
-    onSuccess:function(){ remoteConnected=true; mqttClient.subscribe('proyector/'+room+'/cmd'); },
+    onSuccess:function(){ remoteConnected=true; mqttClient.subscribe('liteworship/'+room+'/cmd'); },
     onFailure:function(){ remoteConnected=false; setTimeout(()=>connectRemoteWS(room,onMessage),4000); }
   });
 }
@@ -879,7 +879,7 @@ function connectRemoteWS(room,onMessage){
 function sendRemote(data){
   if(!mqttClient||!mqttClient.isConnected()||!_remoteRoom)return;
   const msg=new Paho.Message(JSON.stringify(data));
-  msg.destinationName='proyector/'+_remoteRoom+'/state';
+  msg.destinationName='liteworship/'+_remoteRoom+'/state';
   msg.retained=true;
   try{ mqttClient.send(msg); }catch(_){}
 }
@@ -951,6 +951,70 @@ document.getElementById('btnRemoteControl').addEventListener('click',()=>{
   document.getElementById('btnCloseQR').addEventListener('click',()=>{ overlay.remove(); document.getElementById('btnRemoteControl').classList.remove('active'); });
   overlay.addEventListener('click',e=>{ if(e.target===overlay){ overlay.remove(); document.getElementById('btnRemoteControl').classList.remove('active'); } });
   document.getElementById('btnRemoteControl').classList.add('active');
+});
+
+// ── ACERCA DE / LICENCIA ──
+document.getElementById('btnAbout').addEventListener('click', () => {
+  const existing = document.getElementById('aboutModal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'aboutModal';
+  modal.className = 'modal-bg';
+  modal.innerHTML = `
+    <div class="modal" style="width:520px;max-width:92vw;max-height:85vh;overflow-y:auto;">
+      <div style="text-align:center;margin-bottom:18px;">
+        <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(145deg,#E8AA4C,#b8821c);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-weight:800;color:#1a1005;font-size:22px;">LW</div>
+        <h2 style="margin:0 0 4px;font-size:20px;">LiteWorship</h2>
+        <p style="margin:0;font-size:12px;color:var(--text-faint);">Versión 1.0 &nbsp;·&nbsp; © 2026 Emanuel Marzano</p>
+      </div>
+      <div style="font-size:12.5px;line-height:1.7;color:var(--text-muted);border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--bg);">
+        <p style="font-weight:700;color:var(--text);margin-bottom:12px;">LICENCIA DE USO — LiteWorship v1.0</p>
+
+        <p style="font-weight:600;color:var(--text);margin-bottom:4px;">1. Propiedad intelectual</p>
+        <p style="margin-bottom:12px;">LiteWorship, incluyendo su código fuente, diseño, interfaz gráfica, estructura, arquitectura, documentación y demás elementos que lo integran, es una obra intelectual creada y desarrollada por <strong style="color:var(--amber);">Emanuel Marzano (Mr.X)</strong>. Todos los derechos de propiedad intelectual pertenecen exclusivamente al autor.</p>
+
+        <p style="font-weight:600;color:var(--text);margin-bottom:4px;">2. Licencia de uso</p>
+        <p style="margin-bottom:12px;">Se concede al usuario una licencia personal, limitada, no exclusiva, revocable e intransferible para utilizar LiteWorship conforme a los términos de este documento. La presente licencia no transfiere la propiedad del software ni concede derechos sobre su código fuente o elementos internos.</p>
+
+        <p style="font-weight:600;color:var(--text);margin-bottom:4px;">3. Usos permitidos</p>
+        <p style="margin-bottom:4px;">El usuario puede:</p>
+        <ul style="margin:0 0 12px 18px;">
+          <li>Utilizar LiteWorship para la proyección y administración de contenido en iglesias u organizaciones autorizadas.</li>
+          <li>Instalar el software en los equipos necesarios para su funcionamiento.</li>
+          <li>Recibir las actualizaciones que el autor publique, cuando estén disponibles.</li>
+        </ul>
+
+        <p style="font-weight:600;color:var(--text);margin-bottom:4px;">4. Restricciones</p>
+        <p style="margin-bottom:4px;">Queda estrictamente prohibido:</p>
+        <ul style="margin:0 0 12px 18px;">
+          <li>Copiar total o parcialmente el código fuente.</li>
+          <li>Descompilar, modificar o crear versiones derivadas del software.</li>
+          <li>Distribuir el software como propio.</li>
+          <li>Comercializar, vender, alquilar o sublicenciar el software sin autorización escrita del autor.</li>
+          <li>Eliminar o modificar los créditos, avisos de copyright o referencias al autor.</li>
+          <li>Utilizar el software como base para desarrollar un producto similar con fines comerciales.</li>
+        </ul>
+
+        <p style="font-weight:600;color:var(--text);margin-bottom:4px;">5. Distribución</p>
+        <p style="margin-bottom:12px;">LiteWorship únicamente podrá distribuirse por los medios autorizados por el autor. Cualquier distribución realizada por terceros requerirá autorización expresa y por escrito del autor.</p>
+
+        <p style="font-weight:600;color:var(--text);margin-bottom:4px;">6. Actualizaciones</p>
+        <p style="margin-bottom:12px;">El autor podrá publicar nuevas versiones, corregir errores, incorporar nuevas funciones, modificar la forma de distribución y crear versiones gratuitas o comerciales. No existe obligación de proporcionar actualizaciones permanentes.</p>
+
+        <p style="font-weight:600;color:var(--text);margin-bottom:4px;">7. Limitación de responsabilidad</p>
+        <p style="margin-bottom:12px;">LiteWorship se proporciona "tal cual", sin garantías explícitas o implícitas respecto a su funcionamiento en todos los entornos. El autor no será responsable por pérdidas de información, interrupciones del servicio o daños derivados del uso del software.</p>
+
+        <p style="font-weight:600;color:var(--text);margin-bottom:4px;">8. Derechos reservados</p>
+        <p>Todos los derechos que no sean expresamente otorgados mediante esta licencia permanecen reservados al autor.</p>
+      </div>
+      <p style="text-align:center;margin-top:14px;font-size:11px;color:var(--text-faint);">Autor y desarrollador: <strong style="color:var(--amber);">Emanuel Marzano (Mr.X)</strong><br>© 2026 Todos los derechos reservados.</p>
+      <div class="btn-row" style="justify-content:center;margin-top:14px;">
+        <button class="btn btn-ghost" id="btnCloseAbout">Cerrar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('btnCloseAbout').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 });
 
 // ── INICIO ──
