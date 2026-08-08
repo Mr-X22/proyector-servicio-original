@@ -171,11 +171,27 @@ textarea.field-input{resize:vertical;font-family:var(--font-mono);line-height:1.
 .bible-select{flex:1;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 10px;font-size:13px;}
 .bible-select:focus{outline:none;border-color:var(--amber-dim);}
 
+/* ── BIBLE BOOK GRID (estilo Holyrics) ── */
+.bible-book-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:5px;margin-bottom:4px;}
+.bible-book-btn{height:58px;border-radius:7px;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:all .12s;padding:4px;}
+.bible-book-btn:hover{filter:brightness(1.2);}
+.bible-book-btn.active{outline:2px solid #fff;outline-offset:2px;filter:brightness(1.15);}
+.bible-book-abbr{font-size:15px;font-weight:800;color:#fff;line-height:1;}
+.bible-book-name{font-size:8.5px;color:rgba(255,255,255,.75);text-align:center;line-height:1.2;}
+.bible-section-divider{grid-column:1/-1;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);font-weight:700;padding:8px 0 2px;}
+
 /* Grid de capítulos estilo Holyrics */
 .bible-chap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:5px;margin-bottom:12px;flex-shrink:0;}
 .bible-chap-btn{height:36px;border:1px solid var(--border);border-radius:6px;background:var(--panel-raised);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .1s;display:flex;align-items:center;justify-content:center;}
 .bible-chap-btn:hover{border-color:var(--amber-dim);color:var(--text);}
 .bible-chap-btn.active{background:var(--amber);border-color:var(--amber);color:#1a1005;}
+
+/* Breadcrumb de navegación Biblia */
+.bible-breadcrumb{display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-shrink:0;}
+.bible-back-btn{background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px;}
+.bible-back-btn:hover{color:var(--text);border-color:var(--text-faint);}
+.bible-breadcrumb-text{font-size:13px;font-weight:600;color:var(--text);}
+.bible-breadcrumb-sep{color:var(--text-faint);}
 
 /* Barra de proyección fija arriba */
 .bible-proj-bar{flex-shrink:0;background:var(--panel-raised);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
