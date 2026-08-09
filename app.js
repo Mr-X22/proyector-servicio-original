@@ -447,52 +447,24 @@ const BIBLE_SECTIONS = [
   { label:'Apocalipsis', from:65, to:65 },
 ];
 
-// Paso actual: 'books' | 'chapters' | 'verses'
-let bibleStep = 'books';
-
 function renderBibleBrowser() {
-  bibleStep = 'books';
-  renderBibleStep();
-}
-
-function renderBibleStep() {
   const editor = document.getElementById('editor');
   editor.innerHTML = '';
 
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;';
+  // Layout principal: libros arriba, versículos+capítulos abajo
+  const layout = document.createElement('div');
+  layout.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;';
 
-  // Toolbar
-  const toolbar = document.createElement('div');
-  toolbar.className = 'editor-toolbar';
-  toolbar.style.flexShrink = '0';
-  toolbar.innerHTML = '<h2>Biblia — Reina Valera 1960</h2>';
-  wrap.appendChild(toolbar);
+  // ── ZONA SUPERIOR: Grid de libros ──
+  const booksArea = document.createElement('div');
+  booksArea.className = 'bible-books-area';
 
-  const content = document.createElement('div');
-  content.style.cssText = 'flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0;min-height:0;';
-
-  if (bibleStep === 'books') {
-    renderBibleBookGrid(content);
-  } else if (bibleStep === 'chapters') {
-    renderBibleChapterStep(content);
-  } else {
-    renderBibleVerseStep(content);
-  }
-
-  wrap.appendChild(content);
-  editor.appendChild(wrap);
-}
-
-function renderBibleBookGrid(container) {
   BIBLE_SECTIONS.forEach(section => {
-    // Etiqueta de sección
-    const label = document.createElement('div');
-    label.className = 'bible-section-divider';
-    label.textContent = section.label;
-    container.appendChild(label);
+    const divider = document.createElement('div');
+    divider.className = 'bible-section-divider';
+    divider.textContent = section.label;
+    booksArea.appendChild(divider);
 
-    // Grid de libros de esta sección
     const grid = document.createElement('div');
     grid.className = 'bible-book-grid';
     for (let i = section.from; i <= section.to; i++) {
@@ -506,131 +478,147 @@ function renderBibleBookGrid(container) {
         bibleState.bookIndex = i;
         bibleState.chapterIndex = 0;
         bibleState.selectedVerses.clear();
-        bibleStep = 'chapters';
-        renderBibleStep();
+        // Actualizar botón activo
+        booksArea.querySelectorAll('.bible-book-btn').forEach((b,j)=>{
+          // calcular índice global
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        refreshBibleBottom(chapCol, verseCol);
       });
       grid.appendChild(btn);
     }
-    container.appendChild(grid);
+    booksArea.appendChild(grid);
   });
+  layout.appendChild(booksArea);
+
+  // ── ZONA INFERIOR: versículos (izq) + capítulos (der) ──
+  const bottomArea = document.createElement('div');
+  bottomArea.className = 'bible-bottom-area';
+  bottomArea.style.flex = '1';
+  bottomArea.style.minHeight = '0';
+
+  // Columna de versículos
+  const verseCol = document.createElement('div');
+  verseCol.className = 'bible-verse-col';
+  bottomArea.appendChild(verseCol);
+
+  // Columna de capítulos
+  const chapCol = document.createElement('div');
+  chapCol.className = 'bible-chap-col';
+  bottomArea.appendChild(chapCol);
+
+  layout.appendChild(bottomArea);
+  editor.appendChild(layout);
+
+  // Pintar contenido inicial
+  refreshBibleBottom(chapCol, verseCol);
 }
 
-function renderBibleChapterStep(container) {
+function refreshBibleBottom(chapCol, verseCol) {
   const book = bible.getBook(bibleState.bookIndex);
-  if (!book) return;
   const bd = BIBLE_BOOK_DATA[bibleState.bookIndex];
+  if (!book) return;
 
-  // Breadcrumb
-  const bc = document.createElement('div');
-  bc.className = 'bible-breadcrumb';
-  bc.innerHTML = `<button class="bible-back-btn" id="bibleBackBooks">← Libros</button>
-    <span class="bible-breadcrumb-sep">›</span>
-    <span class="bible-breadcrumb-text" style="color:${bd.color};">${esc(book.name)}</span>`;
-  container.appendChild(bc);
-  bc.querySelector('#bibleBackBooks').addEventListener('click', () => { bibleStep='books'; renderBibleStep(); });
+  // ── Capítulos ──
+  chapCol.innerHTML = '';
+  const chapHeader = document.createElement('div');
+  chapHeader.className = 'bible-chap-header';
+  chapHeader.innerHTML = `<h3 style="color:${bd.color};">${esc(book.name)}</h3>`;
+  chapCol.appendChild(chapHeader);
 
-  // Label
-  const lbl = document.createElement('div');
-  lbl.style.cssText = 'font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);font-weight:700;margin-bottom:8px;flex-shrink:0;';
-  lbl.textContent = 'Selecciona un capítulo';
-  container.appendChild(lbl);
-
-  // Grid de capítulos
-  const grid = document.createElement('div');
-  grid.className = 'bible-chap-grid';
+  const chapGrid = document.createElement('div');
+  chapGrid.className = 'bible-chap-grid';
   book.chapters.forEach((_, i) => {
     const btn = document.createElement('button');
     btn.className = 'bible-chap-btn' + (i === bibleState.chapterIndex ? ' active' : '');
+    if (i === bibleState.chapterIndex) btn.style.background = bd.color;
     btn.textContent = i + 1;
     btn.addEventListener('click', () => {
       bibleState.chapterIndex = i;
       bibleState.selectedVerses.clear();
-      bibleStep = 'verses';
-      renderBibleStep();
+      chapGrid.querySelectorAll('.bible-chap-btn').forEach((b, j) => {
+        b.classList.toggle('active', j === i);
+        b.style.background = j === i ? bd.color : '';
+      });
+      refreshVerseList(verseCol, book, bd);
     });
-    grid.appendChild(btn);
+    chapGrid.appendChild(btn);
   });
-  container.appendChild(grid);
+  chapCol.appendChild(chapGrid);
+
+  // ── Versículos ──
+  refreshVerseList(verseCol, book, bd);
 }
 
-function renderBibleVerseStep(container) {
-  const book = bible.getBook(bibleState.bookIndex);
-  if (!book) return;
-  const bd = BIBLE_BOOK_DATA[bibleState.bookIndex];
+function refreshVerseList(verseCol, book, bd) {
+  verseCol.innerHTML = '';
 
-  // Breadcrumb
-  const bc = document.createElement('div');
-  bc.className = 'bible-breadcrumb';
-  bc.style.flexShrink = '0';
-  bc.innerHTML = `
-    <button class="bible-back-btn" id="bibleBackBooks">← Libros</button>
-    <span class="bible-breadcrumb-sep">›</span>
-    <button class="bible-back-btn" id="bibleBackChaps" style="color:${bd.color};border-color:${bd.color};">${esc(book.name)}</button>
-    <span class="bible-breadcrumb-sep">›</span>
-    <span class="bible-breadcrumb-text">Cap. ${bibleState.chapterIndex + 1}</span>`;
-  container.appendChild(bc);
-  bc.querySelector('#bibleBackBooks').addEventListener('click', () => { bibleStep='books'; renderBibleStep(); });
-  bc.querySelector('#bibleBackChaps').addEventListener('click', () => { bibleStep='chapters'; renderBibleStep(); });
-
-  // Barra de proyección fija
-  const projBar = document.createElement('div');
-  projBar.className = 'bible-proj-bar';
-  projBar.style.flexShrink = '0';
-  container.appendChild(projBar);
-  updateBibleProjBarEl(projBar);
+  // Header
+  const header = document.createElement('div');
+  header.className = 'bible-verse-header';
+  header.innerHTML = `<h3>${esc(book.name)} ${bibleState.chapterIndex + 1}</h3>
+    <p>Selecciona hasta ${MAX_VERSES} versículos</p>`;
+  verseCol.appendChild(header);
 
   // Lista de versículos
-  const verseList = document.createElement('div');
-  verseList.className = 'bible-verse-list';
-  verseList.style.flex = '1';
-  container.appendChild(verseList);
-  renderBibleVersesInto(verseList, projBar);
-}
+  const list = document.createElement('div');
+  list.className = 'bible-verse-list';
+  verseCol.appendChild(list);
 
-function updateBibleProjBarEl(bar) {
-  const count = bibleState.selectedVerses.size;
-  bar.innerHTML = `
-    <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES} versículos</div>
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-ghost btn-sm" id="btnAddBibleToList">+ Lista</button>
-      <button class="bible-proj-action" id="btnProjBible" ${count===0?'disabled':''}>
-        ${count>0?'Proyectar ('+count+')':'Proyectar'}
-      </button>
-    </div>`;
-  bar.querySelector('#btnProjBible').addEventListener('click', () => {
-    if (!bibleState.selectedVerses.size) return;
-    projectBibleSelection();
-  });
-  bar.querySelector('#btnAddBibleToList').addEventListener('click', () => {
-    if (!bibleState.selectedVerses.size) { toast('Selecciona al menos un versículo.'); return; }
-    const payload = buildBiblePayload();
-    const list = getCurrentList();
-    if (!list) { toast('Crea una lista de servicio primero.'); return; }
-    list.items.push({ type:'citas', refId:'bible-'+uid(), title:payload.reference, biblePayload:payload });
-    storage.saveList(list).then(() => { renderTimeline(); toast('Añadido a la lista.'); });
-  });
-}
+  // Barra proyectar
+  const projBar = document.createElement('div');
+  projBar.className = 'bible-proj-bar';
+  verseCol.appendChild(projBar);
 
-function renderBibleVersesInto(list, projBar) {
-  list.innerHTML = '';
-  const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
-  verses.forEach((text, i) => {
-    const isSel = bibleState.selectedVerses.has(i);
-    const isDim = !isSel && bibleState.selectedVerses.size >= MAX_VERSES;
-    const item = el(`
-      <div class="bible-verse-item ${isSel?'selected':''} ${isDim?'disabled':''}">
-        <span class="bible-verse-num">${i+1}</span>
-        <span class="bible-verse-text">${esc(text)}</span>
-      </div>`);
-    item.addEventListener('click', () => {
-      if (isDim) { toast(`Máximo ${MAX_VERSES} versículos.`); return; }
-      if (bibleState.selectedVerses.has(i)) bibleState.selectedVerses.delete(i);
-      else { if (bibleState.selectedVerses.size >= MAX_VERSES) return; bibleState.selectedVerses.add(i); }
-      updateBibleProjBarEl(projBar);
-      renderBibleVersesInto(list, projBar);
+  function renderVerses() {
+    list.innerHTML = '';
+    const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
+    verses.forEach((text, i) => {
+      const isSel = bibleState.selectedVerses.has(i);
+      const isDim = !isSel && bibleState.selectedVerses.size >= MAX_VERSES;
+      const item = el(`
+        <div class="bible-verse-item ${isSel?'selected':''} ${isDim?'disabled':''}">
+          <span class="bible-verse-num">${i+1}</span>
+          <span class="bible-verse-text">${esc(text)}</span>
+        </div>`);
+      item.addEventListener('click', () => {
+        if (isDim) return;
+        if (bibleState.selectedVerses.has(i)) bibleState.selectedVerses.delete(i);
+        else { if (bibleState.selectedVerses.size >= MAX_VERSES) return; bibleState.selectedVerses.add(i); }
+        renderVerses();
+        renderProjBar();
+      });
+      list.appendChild(item);
     });
-    list.appendChild(item);
-  });
+  }
+
+  function renderProjBar() {
+    const count = bibleState.selectedVerses.size;
+    projBar.innerHTML = `
+      <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES}</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm" id="btnAddBibleToList">+ Lista</button>
+        <button class="bible-proj-action" id="btnProjBible" ${count===0?'disabled':''}>
+          ${count>0?'Proyectar ('+count+')':'Proyectar'}
+        </button>
+      </div>`;
+    projBar.querySelector('#btnProjBible').addEventListener('click', () => {
+      if (!bibleState.selectedVerses.size) return;
+      projectBibleSelection();
+    });
+    projBar.querySelector('#btnAddBibleToList').addEventListener('click', () => {
+      if (!bibleState.selectedVerses.size) { toast('Selecciona al menos un versículo.'); return; }
+      const payload = buildBiblePayload();
+      const lst = getCurrentList();
+      if (!lst) { toast('Crea una lista de servicio primero.'); return; }
+      lst.items.push({ type:'citas', refId:'bible-'+uid(), title:payload.reference, biblePayload:payload });
+      storage.saveList(lst).then(() => { renderTimeline(); toast('Añadido a la lista.'); });
+    });
+  }
+
+  renderVerses();
+  renderProjBar();
 }
 
 function buildBiblePayload() {
