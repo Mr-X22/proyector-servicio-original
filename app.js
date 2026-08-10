@@ -451,84 +451,72 @@ function renderBibleBrowser() {
   const editor = document.getElementById('editor');
   editor.innerHTML = '';
 
-  // Layout principal: libros arriba, versículos+capítulos abajo
   const layout = document.createElement('div');
   layout.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;';
 
-  // ── ZONA SUPERIOR: Grid de libros ──
+  // ── LIBROS: grid continuo sin etiquetas, diferenciado solo por color ──
   const booksArea = document.createElement('div');
   booksArea.className = 'bible-books-area';
 
-  BIBLE_SECTIONS.forEach(section => {
-    const divider = document.createElement('div');
-    divider.className = 'bible-section-divider';
-    divider.textContent = section.label;
-    booksArea.appendChild(divider);
+  const bookGrid = document.createElement('div');
+  bookGrid.className = 'bible-book-grid';
 
-    const grid = document.createElement('div');
-    grid.className = 'bible-book-grid';
-    for (let i = section.from; i <= section.to; i++) {
-      const bd = BIBLE_BOOK_DATA[i];
-      const btn = document.createElement('button');
-      btn.className = 'bible-book-btn' + (i === bibleState.bookIndex ? ' active' : '');
-      btn.style.background = bd.color;
-      btn.innerHTML = `<span class="bible-book-abbr">${bd.abbr}</span><span class="bible-book-name">${esc(bible.BOOK_NAMES[i])}</span>`;
-      btn.title = bible.BOOK_NAMES[i];
-      btn.addEventListener('click', () => {
-        bibleState.bookIndex = i;
-        bibleState.chapterIndex = 0;
-        bibleState.selectedVerses.clear();
-        // Actualizar botón activo
-        booksArea.querySelectorAll('.bible-book-btn').forEach((b,j)=>{
-          // calcular índice global
-          b.classList.remove('active');
-        });
-        btn.classList.add('active');
-        refreshBibleBottom(chapCol, verseCol);
-      });
-      grid.appendChild(btn);
-    }
-    booksArea.appendChild(grid);
-  });
+  // Pintar los 66 libros en orden continuo (sin dividers)
+  for (let i = 0; i < 66; i++) {
+    const bd = BIBLE_BOOK_DATA[i];
+    const btn = document.createElement('button');
+    btn.className = 'bible-book-btn' + (i === bibleState.bookIndex ? ' active' : '');
+    btn.style.background = bd.color;
+    btn.innerHTML = `<span class="bible-book-abbr">${bd.abbr}</span><span class="bible-book-name">${esc(bible.BOOK_NAMES[i])}</span>`;
+    btn.title = bible.BOOK_NAMES[i];
+    btn.addEventListener('click', () => {
+      bibleState.bookIndex = i;
+      bibleState.chapterIndex = 0;
+      bibleState.selectedVerses.clear();
+      bookGrid.querySelectorAll('.bible-book-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderBibleBottom();
+    });
+    bookGrid.appendChild(btn);
+  }
+  booksArea.appendChild(bookGrid);
   layout.appendChild(booksArea);
 
-  // ── ZONA INFERIOR: versículos (izq) + capítulos (der) ──
+  // ── ZONA INFERIOR: capítulos (izq) + versículos (der) ──
   const bottomArea = document.createElement('div');
-  bottomArea.className = 'bible-bottom-area';
-  bottomArea.style.flex = '1';
-  bottomArea.style.minHeight = '0';
-
-  // Columna de versículos
-  const verseCol = document.createElement('div');
-  verseCol.className = 'bible-verse-col';
-  bottomArea.appendChild(verseCol);
-
-  // Columna de capítulos
-  const chapCol = document.createElement('div');
-  chapCol.className = 'bible-chap-col';
-  bottomArea.appendChild(chapCol);
-
+  bottomArea.id = 'bibleBottomArea';
+  bottomArea.className = 'bible-bottom-area empty';
+  bottomArea.textContent = 'Selecciona un libro para continuar';
   layout.appendChild(bottomArea);
+
   editor.appendChild(layout);
 
-  // Pintar contenido inicial
-  refreshBibleBottom(chapCol, verseCol);
+  // Si ya hay libro seleccionado, pintar de inmediato
+  if (bibleState.bookIndex >= 0) renderBibleBottom();
 }
 
-function refreshBibleBottom(chapCol, verseCol) {
+function renderBibleBottom() {
+  const bottomArea = document.getElementById('bibleBottomArea');
+  if (!bottomArea) return;
+  bottomArea.className = 'bible-bottom-area';
+  bottomArea.innerHTML = '';
+
   const book = bible.getBook(bibleState.bookIndex);
   const bd = BIBLE_BOOK_DATA[bibleState.bookIndex];
   if (!book) return;
 
-  // ── Capítulos ──
-  chapCol.innerHTML = '';
+  // ── Columna de capítulos ──
+  const chapCol = document.createElement('div');
+  chapCol.className = 'bible-chap-col';
+
   const chapHeader = document.createElement('div');
-  chapHeader.className = 'bible-chap-header';
+  chapHeader.className = 'bible-chap-col-header';
   chapHeader.innerHTML = `<h3 style="color:${bd.color};">${esc(book.name)}</h3>`;
   chapCol.appendChild(chapHeader);
 
   const chapGrid = document.createElement('div');
   chapGrid.className = 'bible-chap-grid';
+
   book.chapters.forEach((_, i) => {
     const btn = document.createElement('button');
     btn.className = 'bible-chap-btn' + (i === bibleState.chapterIndex ? ' active' : '');
@@ -541,39 +529,53 @@ function refreshBibleBottom(chapCol, verseCol) {
         b.classList.toggle('active', j === i);
         b.style.background = j === i ? bd.color : '';
       });
-      refreshVerseList(verseCol, book, bd);
+      renderBibleVerseCol(verseCol, book, bd);
     });
     chapGrid.appendChild(btn);
   });
   chapCol.appendChild(chapGrid);
+  bottomArea.appendChild(chapCol);
 
-  // ── Versículos ──
-  refreshVerseList(verseCol, book, bd);
+  // ── Columna de versículos ──
+  const verseCol = document.createElement('div');
+  verseCol.className = 'bible-verse-col';
+  bottomArea.appendChild(verseCol);
+
+  renderBibleVerseCol(verseCol, book, bd);
 }
 
-function refreshVerseList(verseCol, book, bd) {
+function renderBibleVerseCol(verseCol, book, bd) {
   verseCol.innerHTML = '';
 
-  // Header
+  // Header con nombre y capítulo
   const header = document.createElement('div');
-  header.className = 'bible-verse-header';
+  header.className = 'bible-verse-col-header';
   header.innerHTML = `<h3>${esc(book.name)} ${bibleState.chapterIndex + 1}</h3>
-    <p>Selecciona hasta ${MAX_VERSES} versículos</p>`;
+    <p>Selecciona hasta ${MAX_VERSES} versículos · toca para proyectar</p>`;
   verseCol.appendChild(header);
+
+  const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
+
+  if (!verses.length) {
+    const empty = document.createElement('div');
+    empty.className = 'bible-verse-empty';
+    empty.textContent = 'Sin versículos en este capítulo.';
+    verseCol.appendChild(empty);
+    return;
+  }
 
   // Lista de versículos
   const list = document.createElement('div');
   list.className = 'bible-verse-list';
   verseCol.appendChild(list);
 
-  // Barra proyectar
+  // Barra de proyección
   const projBar = document.createElement('div');
   projBar.className = 'bible-proj-bar';
   verseCol.appendChild(projBar);
 
-  function renderVerses() {
+  function paintVerses() {
     list.innerHTML = '';
-    const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
     verses.forEach((text, i) => {
       const isSel = bibleState.selectedVerses.has(i);
       const isDim = !isSel && bibleState.selectedVerses.size >= MAX_VERSES;
@@ -586,17 +588,16 @@ function refreshVerseList(verseCol, book, bd) {
         if (isDim) return;
         if (bibleState.selectedVerses.has(i)) bibleState.selectedVerses.delete(i);
         else { if (bibleState.selectedVerses.size >= MAX_VERSES) return; bibleState.selectedVerses.add(i); }
-        renderVerses();
-        renderProjBar();
+        paintVerses(); paintProjBar();
       });
       list.appendChild(item);
     });
   }
 
-  function renderProjBar() {
+  function paintProjBar() {
     const count = bibleState.selectedVerses.size;
     projBar.innerHTML = `
-      <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES}</div>
+      <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES} versículos</div>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-ghost btn-sm" id="btnAddBibleToList">+ Lista</button>
         <button class="bible-proj-action" id="btnProjBible" ${count===0?'disabled':''}>
@@ -617,8 +618,8 @@ function refreshVerseList(verseCol, book, bd) {
     });
   }
 
-  renderVerses();
-  renderProjBar();
+  paintVerses();
+  paintProjBar();
 }
 
 function buildBiblePayload() {
