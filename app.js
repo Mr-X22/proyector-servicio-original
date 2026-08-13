@@ -379,7 +379,7 @@ function renderVerseEditor(item) {
 const bibleState = { bookIndex:0, chapterIndex:0, selectedVerses:new Set() };
 
 function renderBibleSection() {
-  // Ocultar la columna de biblioteca cuando estamos en Biblia
+  // Solo ocultar biblioteca y expandir editor — no tocar el panel derecho
   document.querySelector('.library').style.display='none';
   document.getElementById('editor').style.gridColumn='2/4';
 
@@ -454,14 +454,12 @@ function renderBibleBrowser() {
   const layout = document.createElement('div');
   layout.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;';
 
-  // ── LIBROS: grid continuo sin etiquetas, diferenciado solo por color ──
+  // ── LIBROS: grid continuo sin etiquetas ──
   const booksArea = document.createElement('div');
   booksArea.className = 'bible-books-area';
-
   const bookGrid = document.createElement('div');
   bookGrid.className = 'bible-book-grid';
 
-  // Pintar los 66 libros en orden continuo (sin dividers)
   for (let i = 0; i < 66; i++) {
     const bd = BIBLE_BOOK_DATA[i];
     const btn = document.createElement('button');
@@ -475,29 +473,31 @@ function renderBibleBrowser() {
       bibleState.selectedVerses.clear();
       bookGrid.querySelectorAll('.bible-book-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      renderBibleBottom();
+      renderBibleChapAndVerses(bottomArea);
     });
     bookGrid.appendChild(btn);
   }
   booksArea.appendChild(bookGrid);
   layout.appendChild(booksArea);
 
-  // ── ZONA INFERIOR: capítulos (izq) + versículos (der) ──
+  // ── ZONA INFERIOR: capítulos izq + versículos der ──
   const bottomArea = document.createElement('div');
-  bottomArea.id = 'bibleBottomArea';
-  bottomArea.className = 'bible-bottom-area empty';
-  bottomArea.textContent = 'Selecciona un libro para continuar';
+  bottomArea.className = 'bible-bottom-area';
+  bottomArea.style.flex = '1';
+  bottomArea.style.minHeight = '0';
   layout.appendChild(bottomArea);
 
-  editor.appendChild(layout);
+  if (bibleState.bookIndex >= 0) {
+    renderBibleChapAndVerses(bottomArea);
+  } else {
+    bottomArea.className = 'bible-bottom-area empty';
+    bottomArea.textContent = 'Selecciona un libro para continuar';
+  }
 
-  // Si ya hay libro seleccionado, pintar de inmediato
-  if (bibleState.bookIndex >= 0) renderBibleBottom();
+  editor.appendChild(layout);
 }
 
-function renderBibleBottom() {
-  const bottomArea = document.getElementById('bibleBottomArea');
-  if (!bottomArea) return;
+function renderBibleChapAndVerses(bottomArea) {
   bottomArea.className = 'bible-bottom-area';
   bottomArea.innerHTML = '';
 
@@ -505,7 +505,7 @@ function renderBibleBottom() {
   const bd = BIBLE_BOOK_DATA[bibleState.bookIndex];
   if (!book) return;
 
-  // ── Columna de capítulos ──
+  // ── Columna capítulos ──
   const chapCol = document.createElement('div');
   chapCol.className = 'bible-chap-col';
 
@@ -529,47 +529,44 @@ function renderBibleBottom() {
         b.classList.toggle('active', j === i);
         b.style.background = j === i ? bd.color : '';
       });
-      renderBibleVerseCol(verseCol, book, bd);
+      renderBibleVersePanel(verseCol, book, bd);
     });
     chapGrid.appendChild(btn);
   });
   chapCol.appendChild(chapGrid);
   bottomArea.appendChild(chapCol);
 
-  // ── Columna de versículos ──
+  // ── Columna versículos ──
   const verseCol = document.createElement('div');
   verseCol.className = 'bible-verse-col';
   bottomArea.appendChild(verseCol);
 
-  renderBibleVerseCol(verseCol, book, bd);
+  renderBibleVersePanel(verseCol, book, bd);
 }
 
-function renderBibleVerseCol(verseCol, book, bd) {
+function renderBibleVersePanel(verseCol, book, bd) {
   verseCol.innerHTML = '';
+  const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
 
-  // Header con nombre y capítulo
+  // Header
   const header = document.createElement('div');
   header.className = 'bible-verse-col-header';
   header.innerHTML = `<h3>${esc(book.name)} ${bibleState.chapterIndex + 1}</h3>
-    <p>Selecciona hasta ${MAX_VERSES} versículos · toca para proyectar</p>`;
+    <p>Selecciona hasta ${MAX_VERSES} versículos</p>`;
   verseCol.appendChild(header);
-
-  const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
 
   if (!verses.length) {
     const empty = document.createElement('div');
     empty.className = 'bible-verse-empty';
-    empty.textContent = 'Sin versículos en este capítulo.';
+    empty.textContent = 'Sin versículos.';
     verseCol.appendChild(empty);
     return;
   }
 
-  // Lista de versículos
   const list = document.createElement('div');
   list.className = 'bible-verse-list';
   verseCol.appendChild(list);
 
-  // Barra de proyección
   const projBar = document.createElement('div');
   projBar.className = 'bible-proj-bar';
   verseCol.appendChild(projBar);
@@ -588,16 +585,16 @@ function renderBibleVerseCol(verseCol, book, bd) {
         if (isDim) return;
         if (bibleState.selectedVerses.has(i)) bibleState.selectedVerses.delete(i);
         else { if (bibleState.selectedVerses.size >= MAX_VERSES) return; bibleState.selectedVerses.add(i); }
-        paintVerses(); paintProjBar();
+        paintVerses(); paintBar();
       });
       list.appendChild(item);
     });
   }
 
-  function paintProjBar() {
+  function paintBar() {
     const count = bibleState.selectedVerses.size;
     projBar.innerHTML = `
-      <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES} versículos</div>
+      <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES}</div>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-ghost btn-sm" id="btnAddBibleToList">+ Lista</button>
         <button class="bible-proj-action" id="btnProjBible" ${count===0?'disabled':''}>
@@ -619,7 +616,7 @@ function renderBibleVerseCol(verseCol, book, bd) {
   }
 
   paintVerses();
-  paintProjBar();
+  paintBar();
 }
 
 function buildBiblePayload() {
@@ -1047,6 +1044,112 @@ document.getElementById('btnRemoteControl').addEventListener('click',()=>{
   overlay.addEventListener('click',e=>{ if(e.target===overlay){ overlay.remove(); document.getElementById('btnRemoteControl').classList.remove('active'); } });
   document.getElementById('btnRemoteControl').classList.add('active');
 });
+
+// ── PANEL DERECHO EN MODO BIBLIA ──
+let _origPreviewColHTML = '';
+
+function _setupBibleRightPanel() {
+  const prevCol = document.querySelector('.preview-col');
+  // Guardar HTML original si no lo hemos guardado aún
+  if (!_origPreviewColHTML) _origPreviewColHTML = prevCol.innerHTML;
+  // Reemplazar contenido con panel de versículos
+  prevCol.innerHTML = `
+    <div class="preview-head">
+      <h2>Versículos</h2>
+      <span style="font-size:10px;color:var(--text-faint);" id="bibleVerseLabel">—</span>
+    </div>
+    <div id="bibleRightVerseList" style="flex:1;overflow-y:auto;padding:4px 8px;min-height:0;"></div>
+    <div class="bible-proj-bar" id="bibleRightProjBar" style="flex-shrink:0;"></div>`;
+  _paintBibleRightEmpty();
+}
+
+function _paintBibleRightEmpty() {
+  const list = document.getElementById('bibleRightVerseList');
+  const bar = document.getElementById('bibleRightProjBar');
+  const label = document.getElementById('bibleVerseLabel');
+  if (!list) return;
+  if (label) label.textContent = '—';
+  list.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:12.5px;text-align:center;padding:20px;">Selecciona un capítulo para ver los versículos</div>';
+  if (bar) bar.innerHTML = '';
+}
+
+function paintBibleRightVerses(book, bd) {
+  const list = document.getElementById('bibleRightVerseList');
+  const bar = document.getElementById('bibleRightProjBar');
+  const label = document.getElementById('bibleVerseLabel');
+  if (!list || !bar) return;
+
+  const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
+  if (label) label.textContent = book.name + ' ' + (bibleState.chapterIndex + 1);
+
+  function paintVerses() {
+    list.innerHTML = '';
+    verses.forEach((text, i) => {
+      const isSel = bibleState.selectedVerses.has(i);
+      const isDim = !isSel && bibleState.selectedVerses.size >= MAX_VERSES;
+      const item = el(`
+        <div class="bible-verse-item ${isSel?'selected':''} ${isDim?'disabled':''}">
+          <span class="bible-verse-num">${i+1}</span>
+          <span class="bible-verse-text">${esc(text)}</span>
+        </div>`);
+      item.addEventListener('click', () => {
+        if (isDim) return;
+        if (bibleState.selectedVerses.has(i)) bibleState.selectedVerses.delete(i);
+        else { if (bibleState.selectedVerses.size >= MAX_VERSES) return; bibleState.selectedVerses.add(i); }
+        paintVerses(); paintBar();
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function paintBar() {
+    const count = bibleState.selectedVerses.size;
+    bar.innerHTML = `
+      <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES} versículos</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm" id="bRightAddList">+ Lista</button>
+        <button class="bible-proj-action" id="bRightProj" ${count===0?'disabled':''}>
+          ${count>0?'Proyectar ('+count+')':'Proyectar'}
+        </button>
+      </div>`;
+    bar.querySelector('#bRightProj').addEventListener('click', () => {
+      if (!bibleState.selectedVerses.size) return;
+      projectBibleSelection();
+    });
+    bar.querySelector('#bRightAddList').addEventListener('click', () => {
+      if (!bibleState.selectedVerses.size) { toast('Selecciona al menos un versículo.'); return; }
+      const payload = buildBiblePayload();
+      const lst = getCurrentList();
+      if (!lst) { toast('Crea una lista de servicio primero.'); return; }
+      lst.items.push({ type:'citas', refId:'bible-'+uid(), title:payload.reference, biblePayload:payload });
+      storage.saveList(lst).then(() => { renderTimeline(); toast('Añadido a la lista.'); });
+    });
+  }
+
+  paintVerses(); paintBar();
+}
+
+function _reattachPreviewEvents() {
+  // Reatachar eventos del panel derecho después de restaurar
+  const btnClear = document.getElementById('btnClearProj');
+  if (btnClear) btnClear.addEventListener('click', clearProjection);
+  const btnOpen = document.getElementById('btnOpenProjector');
+  if (btnOpen) btnOpen.addEventListener('click', openProjectorWindow);
+  const btnTheme = document.getElementById('btnToggleTheme');
+  if (btnTheme) btnTheme.addEventListener('click', () => {
+    projTheme = projTheme==='dark'?'light':'dark';
+    btnTheme.textContent = projTheme==='dark'?'☀️ Fondo blanco':'🌙 Fondo negro';
+    const frame = document.getElementById('projFrame');
+    if (frame) frame.style.background = projTheme==='light'?'#fff':'#000';
+    channel.postMessage({type:'theme',theme:projTheme});
+    renderPreview();
+  });
+  const projFont = document.getElementById('projFont');
+  if (projFont) projFont.addEventListener('change', e => { projFont_val = e.target.value; channel.postMessage({type:'settings',font:projFont_val,size:projSize}); });
+  const projSize = document.getElementById('projSize');
+  if (projSize) projSize.addEventListener('change', e => { projSize = e.target.value; channel.postMessage({type:'settings',font:projFont,size:projSize}); });
+  renderPreview(); updateLiveBadge(!!state.liveRef);
+}
 
 // ── ACERCA DE / LICENCIA ──
 document.getElementById('btnAbout').addEventListener('click', () => {
