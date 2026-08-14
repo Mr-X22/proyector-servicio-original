@@ -13,17 +13,6 @@ const state = {
   audio: { dirHandle:null, files:[], currentIndex:-1, el:new Audio(), scrubbing:false },
 };
 
-// ── LÍMITES VERSIÓN LITE ──
-const LITE_MAX_ITEMS = 10;
-const LITE_LIMITED_SECTIONS = ['canciones','anuncios','citas'];
-function liteLimitReached(section) {
-  return LITE_LIMITED_SECTIONS.includes(section) && storage.list(section).length >= LITE_MAX_ITEMS;
-}
-function liteLimitLabel(section) {
-  const NAMES = { canciones:'letras', anuncios:'anuncios', citas:'citas' };
-  return `Límite de ${LITE_MAX_ITEMS} ${NAMES[section]||'elementos'} alcanzado en LiteWorship Lite.`;
-}
-
 // ── UTILS ──
 function toast(msg) {
   const t = document.createElement('div');
@@ -101,16 +90,8 @@ async function ensureDataFolder() {
 }
 
 // ── SECCIONES / RAIL ──
-// ── DESHABILITAR BIBLIA (VERSIÓN LITE) ──
-const LITE_DISABLE_BIBLE = true;
-if (LITE_DISABLE_BIBLE) {
-  const bibleBtn = document.querySelector('.rail-btn[data-section="biblia"]');
-  if (bibleBtn) { bibleBtn.style.display = 'none'; }
-}
-
 document.querySelectorAll('.rail-btn[data-section]').forEach(btn=>{
   btn.addEventListener('click',()=>{
-    if (LITE_DISABLE_BIBLE && btn.dataset.section==='biblia') { toast('La Biblia no está disponible en esta versión Lite.'); return; }
     document.querySelectorAll('.rail-btn[data-section]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const prevSection = state.section;
@@ -134,13 +115,8 @@ function renderLibrary() {
   if (!meta) return;
   document.getElementById('libTitle').textContent = meta.title;
   const items = storage.list(state.section);
-  const isLimited = LITE_LIMITED_SECTIONS.includes(state.section);
-  document.getElementById('libCount').textContent = isLimited ? `${items.length}/${LITE_MAX_ITEMS}` : items.length;
-  const addBtn = document.getElementById('btnAdd');
-  const atLimit = isLimited && items.length >= LITE_MAX_ITEMS;
-  addBtn.textContent = atLimit ? `Límite alcanzado (${LITE_MAX_ITEMS}/${LITE_MAX_ITEMS})` : meta.addLabel;
-  addBtn.disabled = atLimit;
-  addBtn.classList.toggle('lite-limit-reached', atLimit);
+  document.getElementById('libCount').textContent = items.length;
+  document.getElementById('btnAdd').textContent = meta.addLabel;
 
   const query = document.getElementById('libSearch').value.trim().toLowerCase();
   const filtered = items.filter(i=>(i.title||i.reference||'').toLowerCase().includes(query));
@@ -180,7 +156,6 @@ document.getElementById('libSearch').addEventListener('input',()=>{ if(!['audio'
 document.getElementById('btnAdd').addEventListener('click',async()=>{
   if (state.section==='audio') { await chooseAudioFolder(); return; }
   if (!(await ensureDataFolder())) return;
-  if (liteLimitReached(state.section)) { toast(liteLimitLabel(state.section)); return; }
   openEditorFor(null);
 });
 
@@ -306,7 +281,6 @@ function renderSongEditor(item) {
 
   document.getElementById('btnSaveSong').addEventListener('click',async()=>{
     if (!draft.title.trim()){ toast('Ponle un título a la canción.'); return; }
-    if (isNew && liteLimitReached('canciones')) { toast(liteLimitLabel('canciones')); return; }
     draft.slides = draft.slides.filter(s=>s.trim()||draft.slides.length===1);
     try {
       await storage.save('canciones',draft);
@@ -373,7 +347,6 @@ function renderAnnouncementEditor(item) {
     if(!draft.title.trim()){ toast('Ponle un título al anuncio.'); return; }
     if(draft.type==='text'&&!draft.text.trim()){ toast('Escribe el texto del anuncio.'); return; }
     if(draft.type==='image'&&!draft.imageData){ toast('Elige una imagen.'); return; }
-    if(isNew && liteLimitReached('anuncios')){ toast(liteLimitLabel('anuncios')); return; }
     try{ await storage.save('anuncios',draft); toast('Anuncio guardado.'); state.selectedId=draft.id; renderLibrary(); renderAnnouncementEditor(draft); }
     catch(e){ toast(e.message); }
   });
@@ -398,7 +371,6 @@ function renderVerseEditor(item) {
   document.getElementById('btnCancelEdit').addEventListener('click',()=>item?openEditorFor(item):renderEditorEmpty());
   document.getElementById('btnSaveVerse').addEventListener('click',async()=>{
     if(!draft.reference.trim()){ toast('Ponle una referencia a la cita.'); return; }
-    if(isNew && liteLimitReached('citas')){ toast(liteLimitLabel('citas')); return; }
     try{ await storage.save('citas',draft); toast('Cita guardada.'); state.selectedId=draft.id; renderLibrary(); renderVerseEditor(draft); }
     catch(e){ toast(e.message); }
   });
@@ -748,30 +720,12 @@ async function chooseAudioFolder() {
 }
 document.getElementById('btnAudioFolder').addEventListener('click',chooseAudioFolder);
 
-// Mapea la extensión de archivo a un tipo MIME válido. Muchos navegadores no
-// asignan un `type` correcto a los File obtenidos de File System Access API
-// para extensiones como .m4a o .flac, lo que provoca que <audio> no sepa
-// decodificarlos y falle en silencio. Forzamos el tipo correcto aquí.
-function audioMimeFor(name) {
-  const ext = (name.split('.').pop()||'').toLowerCase();
-  return {
-    mp3:'audio/mpeg', wav:'audio/wav', ogg:'audio/ogg',
-    m4a:'audio/mp4', flac:'audio/flac',
-  }[ext] || '';
-}
-
 async function playAudioAt(i) {
   state.audio.currentIndex=i;
   const f=state.audio.files[i];
   const file=await f.handle.getFile();
-  const mime=audioMimeFor(f.name);
-  const blob = mime && file.type!==mime ? new Blob([file], { type: mime }) : file;
-  const url=URL.createObjectURL(blob);
-  state.audio.el.src=url;
-  state.audio.el.play().catch(err=>{
-    toast(`No se pudo reproducir "${f.name}". El formato podría no ser compatible con este navegador.`);
-    console.error('Audio playback error:', err);
-  });
+  const url=URL.createObjectURL(file);
+  state.audio.el.src=url; state.audio.el.play();
   const nowEl=document.getElementById('audioNow'); if(nowEl) nowEl.textContent=f.name;
   const playBtn=document.getElementById('btnAudioPlay'); if(playBtn) playBtn.textContent='⏸';
   if(state.section==='audio') renderAudioSection();
@@ -781,14 +735,13 @@ async function playAudioAt(i) {
 // Reutilizable: se usa desde el botón local, el control remoto y el panel de audio.
 function toggleAudioPlay(){
   if(state.audio.currentIndex===-1&&state.audio.files.length){ playAudioAt(0); return; }
-  if(state.audio.el.paused) state.audio.el.play().catch(err=>{ toast('No se pudo reproducir el audio.'); console.error(err); }); else state.audio.el.pause();
+  if(state.audio.el.paused) state.audio.el.play(); else state.audio.el.pause();
   const btn=document.getElementById('btnAudioPlay'); if(btn) btn.textContent=state.audio.el.paused?'▶':'⏸';
 }
 function audioNext(){ if(!state.audio.files.length)return; playAudioAt((state.audio.currentIndex+1)%state.audio.files.length); }
 function audioRestart(){
   if(state.audio.currentIndex===-1)return;
-  state.audio.el.currentTime=0;
-  state.audio.el.play().catch(err=>{ toast('No se pudo reproducir el audio.'); console.error(err); });
+  state.audio.el.currentTime=0; state.audio.el.play();
   const btn=document.getElementById('btnAudioPlay'); if(btn) btn.textContent='⏸';
 }
 
