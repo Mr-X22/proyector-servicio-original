@@ -105,7 +105,7 @@ async function ensureDataFolder() {
 const LITE_DISABLE_BIBLE = true;
 if (LITE_DISABLE_BIBLE) {
   const bibleBtn = document.querySelector('.rail-btn[data-section="biblia"]');
-  if (bibleBtn) { bibleBtn.classList.add('rail-btn-disabled'); bibleBtn.title = 'No disponible en la versión Lite'; }
+  if (bibleBtn) { bibleBtn.style.display = 'none'; }
 }
 
 document.querySelectorAll('.rail-btn[data-section]').forEach(btn=>{

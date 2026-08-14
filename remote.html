@@ -238,7 +238,7 @@ document.getElementById('btnClear').addEventListener('click', () => sendCmd('cle
 const LITE_DISABLE_BIBLE = true;
 if (LITE_DISABLE_BIBLE) {
   const tb = document.getElementById('tabBiblia');
-  if (tb) tb.classList.add('tab-disabled');
+  if (tb) tb.style.display = 'none';
 }
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
   if (LITE_DISABLE_BIBLE && t.dataset.tab === 'biblia') return;
