@@ -13,6 +13,17 @@ const state = {
   audio: { dirHandle:null, files:[], currentIndex:-1, el:new Audio(), scrubbing:false },
 };
 
+// ── LÍMITES VERSIÓN LITE ──
+const LITE_MAX_ITEMS = 10;
+const LITE_LIMITED_SECTIONS = ['canciones','anuncios','citas'];
+function liteLimitReached(section) {
+  return LITE_LIMITED_SECTIONS.includes(section) && storage.list(section).length >= LITE_MAX_ITEMS;
+}
+function liteLimitLabel(section) {
+  const NAMES = { canciones:'letras', anuncios:'anuncios', citas:'citas' };
+  return `Límite de ${LITE_MAX_ITEMS} ${NAMES[section]||'elementos'} alcanzado en LiteWorship Lite.`;
+}
+
 // ── UTILS ──
 function toast(msg) {
   const t = document.createElement('div');
@@ -115,8 +126,13 @@ function renderLibrary() {
   if (!meta) return;
   document.getElementById('libTitle').textContent = meta.title;
   const items = storage.list(state.section);
-  document.getElementById('libCount').textContent = items.length;
-  document.getElementById('btnAdd').textContent = meta.addLabel;
+  const isLimited = LITE_LIMITED_SECTIONS.includes(state.section);
+  document.getElementById('libCount').textContent = isLimited ? `${items.length}/${LITE_MAX_ITEMS}` : items.length;
+  const addBtn = document.getElementById('btnAdd');
+  const atLimit = isLimited && items.length >= LITE_MAX_ITEMS;
+  addBtn.textContent = atLimit ? `Límite alcanzado (${LITE_MAX_ITEMS}/${LITE_MAX_ITEMS})` : meta.addLabel;
+  addBtn.disabled = atLimit;
+  addBtn.classList.toggle('lite-limit-reached', atLimit);
 
   const query = document.getElementById('libSearch').value.trim().toLowerCase();
   const filtered = items.filter(i=>(i.title||i.reference||'').toLowerCase().includes(query));
@@ -156,6 +172,7 @@ document.getElementById('libSearch').addEventListener('input',()=>{ if(!['audio'
 document.getElementById('btnAdd').addEventListener('click',async()=>{
   if (state.section==='audio') { await chooseAudioFolder(); return; }
   if (!(await ensureDataFolder())) return;
+  if (liteLimitReached(state.section)) { toast(liteLimitLabel(state.section)); return; }
   openEditorFor(null);
 });
 
@@ -281,6 +298,7 @@ function renderSongEditor(item) {
 
   document.getElementById('btnSaveSong').addEventListener('click',async()=>{
     if (!draft.title.trim()){ toast('Ponle un título a la canción.'); return; }
+    if (isNew && liteLimitReached('canciones')) { toast(liteLimitLabel('canciones')); return; }
     draft.slides = draft.slides.filter(s=>s.trim()||draft.slides.length===1);
     try {
       await storage.save('canciones',draft);
@@ -347,6 +365,7 @@ function renderAnnouncementEditor(item) {
     if(!draft.title.trim()){ toast('Ponle un título al anuncio.'); return; }
     if(draft.type==='text'&&!draft.text.trim()){ toast('Escribe el texto del anuncio.'); return; }
     if(draft.type==='image'&&!draft.imageData){ toast('Elige una imagen.'); return; }
+    if(isNew && liteLimitReached('anuncios')){ toast(liteLimitLabel('anuncios')); return; }
     try{ await storage.save('anuncios',draft); toast('Anuncio guardado.'); state.selectedId=draft.id; renderLibrary(); renderAnnouncementEditor(draft); }
     catch(e){ toast(e.message); }
   });
@@ -371,6 +390,7 @@ function renderVerseEditor(item) {
   document.getElementById('btnCancelEdit').addEventListener('click',()=>item?openEditorFor(item):renderEditorEmpty());
   document.getElementById('btnSaveVerse').addEventListener('click',async()=>{
     if(!draft.reference.trim()){ toast('Ponle una referencia a la cita.'); return; }
+    if(isNew && liteLimitReached('citas')){ toast(liteLimitLabel('citas')); return; }
     try{ await storage.save('citas',draft); toast('Cita guardada.'); state.selectedId=draft.id; renderLibrary(); renderVerseEditor(draft); }
     catch(e){ toast(e.message); }
   });
