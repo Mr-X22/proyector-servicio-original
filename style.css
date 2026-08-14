@@ -58,6 +58,8 @@ input,textarea,select{font-family:inherit;}
 .lib-add:hover{filter:brightness(1.1);}
 .lib-add:disabled,.lib-add.lite-limit-reached{background:var(--border,#333);color:var(--text-faint,#888);cursor:not-allowed;filter:none;}
 .lib-add:disabled:hover,.lib-add.lite-limit-reached:hover{filter:none;}
+.rail-btn-disabled{opacity:.32;cursor:not-allowed;}
+.rail-btn-disabled:hover{opacity:.32;}
 .lib-search{margin:0 12px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:calc(100% - 24px);transition:border-color .15s;}
 .lib-search:focus{outline:none;border-color:var(--amber-dim);}
 .lib-list{flex:1;overflow-y:auto;padding:0 8px 12px;}

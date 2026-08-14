@@ -101,8 +101,16 @@ async function ensureDataFolder() {
 }
 
 // ── SECCIONES / RAIL ──
+// ── DESHABILITAR BIBLIA (VERSIÓN LITE) ──
+const LITE_DISABLE_BIBLE = true;
+if (LITE_DISABLE_BIBLE) {
+  const bibleBtn = document.querySelector('.rail-btn[data-section="biblia"]');
+  if (bibleBtn) { bibleBtn.classList.add('rail-btn-disabled'); bibleBtn.title = 'No disponible en la versión Lite'; }
+}
+
 document.querySelectorAll('.rail-btn[data-section]').forEach(btn=>{
   btn.addEventListener('click',()=>{
+    if (LITE_DISABLE_BIBLE && btn.dataset.section==='biblia') { toast('La Biblia no está disponible en esta versión Lite.'); return; }
     document.querySelectorAll('.rail-btn[data-section]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const prevSection = state.section;
@@ -740,12 +748,30 @@ async function chooseAudioFolder() {
 }
 document.getElementById('btnAudioFolder').addEventListener('click',chooseAudioFolder);
 
+// Mapea la extensión de archivo a un tipo MIME válido. Muchos navegadores no
+// asignan un `type` correcto a los File obtenidos de File System Access API
+// para extensiones como .m4a o .flac, lo que provoca que <audio> no sepa
+// decodificarlos y falle en silencio. Forzamos el tipo correcto aquí.
+function audioMimeFor(name) {
+  const ext = (name.split('.').pop()||'').toLowerCase();
+  return {
+    mp3:'audio/mpeg', wav:'audio/wav', ogg:'audio/ogg',
+    m4a:'audio/mp4', flac:'audio/flac',
+  }[ext] || '';
+}
+
 async function playAudioAt(i) {
   state.audio.currentIndex=i;
   const f=state.audio.files[i];
   const file=await f.handle.getFile();
-  const url=URL.createObjectURL(file);
-  state.audio.el.src=url; state.audio.el.play();
+  const mime=audioMimeFor(f.name);
+  const blob = mime && file.type!==mime ? new Blob([file], { type: mime }) : file;
+  const url=URL.createObjectURL(blob);
+  state.audio.el.src=url;
+  state.audio.el.play().catch(err=>{
+    toast(`No se pudo reproducir "${f.name}". El formato podría no ser compatible con este navegador.`);
+    console.error('Audio playback error:', err);
+  });
   const nowEl=document.getElementById('audioNow'); if(nowEl) nowEl.textContent=f.name;
   const playBtn=document.getElementById('btnAudioPlay'); if(playBtn) playBtn.textContent='⏸';
   if(state.section==='audio') renderAudioSection();
@@ -755,13 +781,14 @@ async function playAudioAt(i) {
 // Reutilizable: se usa desde el botón local, el control remoto y el panel de audio.
 function toggleAudioPlay(){
   if(state.audio.currentIndex===-1&&state.audio.files.length){ playAudioAt(0); return; }
-  if(state.audio.el.paused) state.audio.el.play(); else state.audio.el.pause();
+  if(state.audio.el.paused) state.audio.el.play().catch(err=>{ toast('No se pudo reproducir el audio.'); console.error(err); }); else state.audio.el.pause();
   const btn=document.getElementById('btnAudioPlay'); if(btn) btn.textContent=state.audio.el.paused?'▶':'⏸';
 }
 function audioNext(){ if(!state.audio.files.length)return; playAudioAt((state.audio.currentIndex+1)%state.audio.files.length); }
 function audioRestart(){
   if(state.audio.currentIndex===-1)return;
-  state.audio.el.currentTime=0; state.audio.el.play();
+  state.audio.el.currentTime=0;
+  state.audio.el.play().catch(err=>{ toast('No se pudo reproducir el audio.'); console.error(err); });
   const btn=document.getElementById('btnAudioPlay'); if(btn) btn.textContent='⏸';
 }
 
