@@ -94,11 +94,14 @@ document.querySelectorAll('.rail-btn[data-section]').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('.rail-btn[data-section]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
+    const prevSection = state.section;
     state.section = btn.dataset.section;
     state.selectedId = null;
     // Restaurar columna de biblioteca si venimos de Biblia
     document.querySelector('.library').style.display='';
     document.getElementById('editor').style.gridColumn='';
+    // Si veníamos de Biblia y el panel de "Proyección" fue reemplazado por el de versículos, restaurarlo
+    if (prevSection==='biblia' && state.section!=='biblia') restoreProjectionPanel();
     if (state.section==='audio') renderAudioSection();
     else if (state.section==='biblia') renderBibleSection();
     else { renderLibrary(); renderEditorEmpty(); }
@@ -389,6 +392,7 @@ function renderBibleSection() {
   bible.load(msg=>{ const el=document.getElementById('bibleLoadMsg'); if(el)el.textContent=msg; }).then(ok=>{
     if (!ok) { editor.innerHTML='<div class="editor-empty"><p>No se pudo cargar la Biblia.<br>Verifica tu conexión a internet la primera vez.</p></div>'; return; }
     renderBibleBrowser();
+    showBibleRightPanel();
   });
 }
 
@@ -474,6 +478,7 @@ function renderBibleBrowser() {
       bookGrid.querySelectorAll('.bible-book-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       renderBibleChapAndVerses(bottomArea);
+      paintBibleRightPanel();
     });
     bookGrid.appendChild(btn);
   }
@@ -498,16 +503,16 @@ function renderBibleBrowser() {
 }
 
 function renderBibleChapAndVerses(bottomArea) {
-  bottomArea.className = 'bible-bottom-area';
+  bottomArea.className = 'bible-bottom-area single-col';
   bottomArea.innerHTML = '';
 
   const book = bible.getBook(bibleState.bookIndex);
   const bd = BIBLE_BOOK_DATA[bibleState.bookIndex];
   if (!book) return;
 
-  // ── Columna capítulos ──
+  // ── Columna capítulos (a todo lo ancho — los versículos van al panel derecho) ──
   const chapCol = document.createElement('div');
-  chapCol.className = 'bible-chap-col';
+  chapCol.className = 'bible-chap-col no-border';
 
   const chapHeader = document.createElement('div');
   chapHeader.className = 'bible-chap-col-header';
@@ -529,50 +534,112 @@ function renderBibleChapAndVerses(bottomArea) {
         b.classList.toggle('active', j === i);
         b.style.background = j === i ? bd.color : '';
       });
-      renderBibleVersePanel(verseCol, book, bd);
+      paintBibleRightPanel();
     });
     chapGrid.appendChild(btn);
   });
   chapCol.appendChild(chapGrid);
   bottomArea.appendChild(chapCol);
-
-  // ── Columna versículos ──
-  const verseCol = document.createElement('div');
-  verseCol.className = 'bible-verse-col';
-  bottomArea.appendChild(verseCol);
-
-  renderBibleVersePanel(verseCol, book, bd);
 }
 
-function renderBibleVersePanel(verseCol, book, bd) {
-  verseCol.innerHTML = '';
+function buildBiblePayload() {
+  const sorted=[...bibleState.selectedVerses].sort((a,b)=>a-b);
+  return bible.buildVersePayload(bibleState.bookIndex,bibleState.chapterIndex,sorted[0],sorted[sorted.length-1]);
+}
+
+function projectBibleSelection() {
+  const payload=buildBiblePayload();
+  state.liveRef={ collection:'biblia', id:'bible-current', slideIndex:0,
+    snapshot:{ title:payload.reference, slides:[payload.text], reference:payload.reference, text:payload.text } };
+  sendCurrentSlide(); renderPreview(); updateLiveBadge(true); highlightTimelineLive();
+}
+
+// ── PANEL DERECHO EN MODO BIBLIA ──
+// Mientras la sección "Biblia" está activa, la columna derecha (que normalmente
+// muestra "Proyección") se reemplaza por la lista de versículos del capítulo
+// seleccionado. Al salir de Biblia se restaura tal cual estaba.
+let _origPreviewColHTML = null;
+
+function showBibleRightPanel() {
+  const prevCol = document.querySelector('.preview-col');
+  if (!prevCol) return;
+  if (_origPreviewColHTML === null) _origPreviewColHTML = prevCol.innerHTML;
+  prevCol.innerHTML = `
+    <div class="preview-head">
+      <h2>Versículos</h2>
+      <span style="font-size:10px;color:var(--text-faint);" id="bibleVerseLabel">—</span>
+    </div>
+    <div class="bible-verse-list" id="bibleRightVerseList" style="flex:1;overflow-y:auto;padding:4px 6px;min-height:0;"></div>
+    <div class="bible-proj-bar" id="bibleRightProjBar" style="flex-shrink:0;"></div>`;
+  paintBibleRightPanel();
+}
+
+function restoreProjectionPanel() {
+  if (_origPreviewColHTML === null) return; // no estaba reemplazado, nada que hacer
+  const prevCol = document.querySelector('.preview-col');
+  if (prevCol) prevCol.innerHTML = _origPreviewColHTML;
+  _origPreviewColHTML = null;
+  _reattachProjectionPanelEvents();
+}
+
+// Reconecta los controles de la columna derecha después de restaurar su HTML original
+// (el innerHTML nuevo no conserva los listeners que estaban puestos en los nodos viejos).
+function _reattachProjectionPanelEvents() {
+  const btnClear = document.getElementById('btnClearProj');
+  if (btnClear) btnClear.addEventListener('click', clearProjection);
+  const btnOpen = document.getElementById('btnOpenProjector');
+  if (btnOpen) btnOpen.addEventListener('click', openProjectorWindow);
+  const btnTheme = document.getElementById('btnToggleTheme');
+  if (btnTheme) { btnTheme.textContent = projTheme==='dark'?'☀️ Fondo blanco':'🌙 Fondo negro'; btnTheme.addEventListener('click', toggleProjTheme); }
+  const fontSel = document.getElementById('projFont');
+  if (fontSel) { fontSel.value = projFont; fontSel.addEventListener('change', e => { projFont = e.target.value; channel.postMessage({type:'settings',font:projFont,size:projSize}); }); }
+  const sizeSel = document.getElementById('projSize');
+  if (sizeSel) sizeSel.addEventListener('change', e => { projSize = e.target.value; channel.postMessage({type:'settings',font:projFont,size:projSize}); });
+  const btnPrev = document.getElementById('btnPrevSlide');
+  if (btnPrev) btnPrev.addEventListener('click', goPrevSlide);
+  const btnNext = document.getElementById('btnNextSlide');
+  if (btnNext) btnNext.addEventListener('click', goNextSlide);
+  const btnPlay = document.getElementById('btnAudioPlay');
+  if (btnPlay) { btnPlay.textContent = (state.audio.currentIndex>=0 && !state.audio.el.paused)?'⏸':'▶'; btnPlay.addEventListener('click', toggleAudioPlay); }
+  const btnAudioNextEl = document.getElementById('btnAudioNext');
+  if (btnAudioNextEl) btnAudioNextEl.addEventListener('click', audioNext);
+  const btnAudioPrevEl = document.getElementById('btnAudioPrev');
+  if (btnAudioPrevEl) btnAudioPrevEl.addEventListener('click', audioRestart);
+  const btnFolder = document.getElementById('btnAudioFolder');
+  if (btnFolder) btnFolder.addEventListener('click', chooseAudioFolder);
+  const progressBar = document.getElementById('audioProgress');
+  if (progressBar) progressBar.addEventListener('mousedown', e => {
+    if (state.audio.currentIndex===-1) return;
+    state.audio.scrubbing = true;
+    seekFromEvent(e);
+    const onMove = ev => seekFromEvent(ev);
+    const onUp = () => { state.audio.scrubbing = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+  });
+  // Restaurar contenido dinámico
+  const nowEl = document.getElementById('audioNow');
+  if (nowEl && state.audio.currentIndex>=0) nowEl.textContent = state.audio.files[state.audio.currentIndex]?.name || 'Sin pista seleccionada';
+  const fill = document.getElementById('audioProgressFill');
+  if (fill && state.audio.el.duration) fill.style.width = `${(state.audio.el.currentTime/state.audio.el.duration)*100}%`;
+  renderPreview();
+  updateLiveBadge(!!state.liveRef);
+}
+
+function paintBibleRightPanel() {
+  const list = document.getElementById('bibleRightVerseList');
+  const bar = document.getElementById('bibleRightProjBar');
+  const label = document.getElementById('bibleVerseLabel');
+  if (!list || !bar) return; // el panel no está visible ahora mismo
+
+  const book = bible.getBook(bibleState.bookIndex);
+  if (!book) { list.innerHTML = ''; bar.innerHTML = ''; if (label) label.textContent = '—'; return; }
+
   const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
-
-  // Header
-  const header = document.createElement('div');
-  header.className = 'bible-verse-col-header';
-  header.innerHTML = `<h3>${esc(book.name)} ${bibleState.chapterIndex + 1}</h3>
-    <p>Selecciona hasta ${MAX_VERSES} versículos</p>`;
-  verseCol.appendChild(header);
-
-  if (!verses.length) {
-    const empty = document.createElement('div');
-    empty.className = 'bible-verse-empty';
-    empty.textContent = 'Sin versículos.';
-    verseCol.appendChild(empty);
-    return;
-  }
-
-  const list = document.createElement('div');
-  list.className = 'bible-verse-list';
-  verseCol.appendChild(list);
-
-  const projBar = document.createElement('div');
-  projBar.className = 'bible-proj-bar';
-  verseCol.appendChild(projBar);
+  if (label) label.textContent = `${book.name} ${bibleState.chapterIndex + 1}`;
 
   function paintVerses() {
     list.innerHTML = '';
+    if (!verses.length) { list.innerHTML = '<div class="bible-verse-empty">Sin versículos.</div>'; return; }
     verses.forEach((text, i) => {
       const isSel = bibleState.selectedVerses.has(i);
       const isDim = !isSel && bibleState.selectedVerses.size >= MAX_VERSES;
@@ -593,19 +660,19 @@ function renderBibleVersePanel(verseCol, book, bd) {
 
   function paintBar() {
     const count = bibleState.selectedVerses.size;
-    projBar.innerHTML = `
+    bar.innerHTML = `
       <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES}</div>
       <div style="display:flex;gap:6px;">
-        <button class="btn btn-ghost btn-sm" id="btnAddBibleToList">+ Lista</button>
-        <button class="bible-proj-action" id="btnProjBible" ${count===0?'disabled':''}>
+        <button class="btn btn-ghost btn-sm" id="bRightAddList">+ Lista</button>
+        <button class="bible-proj-action" id="bRightProj" ${count===0?'disabled':''}>
           ${count>0?'Proyectar ('+count+')':'Proyectar'}
         </button>
       </div>`;
-    projBar.querySelector('#btnProjBible').addEventListener('click', () => {
+    bar.querySelector('#bRightProj').addEventListener('click', () => {
       if (!bibleState.selectedVerses.size) return;
       projectBibleSelection();
     });
-    projBar.querySelector('#btnAddBibleToList').addEventListener('click', () => {
+    bar.querySelector('#bRightAddList').addEventListener('click', () => {
       if (!bibleState.selectedVerses.size) { toast('Selecciona al menos un versículo.'); return; }
       const payload = buildBiblePayload();
       const lst = getCurrentList();
@@ -617,18 +684,6 @@ function renderBibleVersePanel(verseCol, book, bd) {
 
   paintVerses();
   paintBar();
-}
-
-function buildBiblePayload() {
-  const sorted=[...bibleState.selectedVerses].sort((a,b)=>a-b);
-  return bible.buildVersePayload(bibleState.bookIndex,bibleState.chapterIndex,sorted[0],sorted[sorted.length-1]);
-}
-
-function projectBibleSelection() {
-  const payload=buildBiblePayload();
-  state.liveRef={ collection:'biblia', id:'bible-current', slideIndex:0,
-    snapshot:{ title:payload.reference, slides:[payload.text], reference:payload.reference, text:payload.text } };
-  sendCurrentSlide(); renderPreview(); updateLiveBadge(true); highlightTimelineLive();
 }
 
 // ── AUDIO ──
@@ -671,45 +726,48 @@ async function playAudioAt(i) {
   const file=await f.handle.getFile();
   const url=URL.createObjectURL(file);
   state.audio.el.src=url; state.audio.el.play();
-  document.getElementById('audioNow').textContent=f.name;
-  document.getElementById('btnAudioPlay').textContent='⏸';
+  const nowEl=document.getElementById('audioNow'); if(nowEl) nowEl.textContent=f.name;
+  const playBtn=document.getElementById('btnAudioPlay'); if(playBtn) playBtn.textContent='⏸';
   if(state.section==='audio') renderAudioSection();
   publishRemoteState();
 }
 
-document.getElementById('btnAudioPlay').addEventListener('click',()=>{
+// Reutilizable: se usa desde el botón local, el control remoto y el panel de audio.
+function toggleAudioPlay(){
   if(state.audio.currentIndex===-1&&state.audio.files.length){ playAudioAt(0); return; }
-  if(state.audio.el.paused){ state.audio.el.play(); document.getElementById('btnAudioPlay').textContent='⏸'; }
-  else{ state.audio.el.pause(); document.getElementById('btnAudioPlay').textContent='▶'; }
-});
-document.getElementById('btnAudioNext').addEventListener('click',()=>{
-  if(!state.audio.files.length)return;
-  playAudioAt((state.audio.currentIndex+1)%state.audio.files.length);
-});
-document.getElementById('btnAudioPrev').addEventListener('click',()=>{
+  if(state.audio.el.paused) state.audio.el.play(); else state.audio.el.pause();
+  const btn=document.getElementById('btnAudioPlay'); if(btn) btn.textContent=state.audio.el.paused?'▶':'⏸';
+}
+function audioNext(){ if(!state.audio.files.length)return; playAudioAt((state.audio.currentIndex+1)%state.audio.files.length); }
+function audioRestart(){
   if(state.audio.currentIndex===-1)return;
   state.audio.el.currentTime=0; state.audio.el.play();
-  document.getElementById('btnAudioPlay').textContent='⏸';
-});
+  const btn=document.getElementById('btnAudioPlay'); if(btn) btn.textContent='⏸';
+}
+
+document.getElementById('btnAudioPlay').addEventListener('click',toggleAudioPlay);
+document.getElementById('btnAudioNext').addEventListener('click',audioNext);
+document.getElementById('btnAudioPrev').addEventListener('click',audioRestart);
 
 let _lastAudioPublish=0;
 state.audio.el.addEventListener('timeupdate',()=>{
   const{currentTime,duration}=state.audio.el;
-  if(duration&&!state.audio.scrubbing) document.getElementById('audioProgressFill').style.width=`${(currentTime/duration)*100}%`;
+  const fill=document.getElementById('audioProgressFill');
+  if(duration&&!state.audio.scrubbing&&fill) fill.style.width=`${(currentTime/duration)*100}%`;
   const now=Date.now();
   if(now-_lastAudioPublish>3000){ _lastAudioPublish=now; publishRemoteState(); }
 });
-state.audio.el.addEventListener('ended',()=>document.getElementById('btnAudioNext').click());
+state.audio.el.addEventListener('ended',audioNext);
 
-const audioProgressBar=document.getElementById('audioProgress');
 function seekFromEvent(e){
-  if(!state.audio.el.duration)return;
+  const audioProgressBar=document.getElementById('audioProgress');
+  if(!state.audio.el.duration||!audioProgressBar)return;
   const rect=audioProgressBar.getBoundingClientRect();
   const ratio=Math.min(1,Math.max(0,(e.clientX-rect.left)/rect.width));
-  document.getElementById('audioProgressFill').style.width=`${ratio*100}%`;
+  const fill=document.getElementById('audioProgressFill'); if(fill) fill.style.width=`${ratio*100}%`;
   state.audio.el.currentTime=ratio*state.audio.el.duration;
 }
-audioProgressBar.addEventListener('mousedown',e=>{
+document.getElementById('audioProgress').addEventListener('mousedown',e=>{
   if(state.audio.currentIndex===-1)return;
   state.audio.scrubbing=true;
   seekFromEvent(e);
@@ -770,15 +828,19 @@ function sendCurrentSlide(){
 }
 
 function updateLiveBadge(on){
-  document.getElementById('liveBadge').classList.toggle('on',on);
-  document.getElementById('liveText').textContent=on?'EN VIVO':'SIN SEÑAL';
-  document.getElementById('dotLive').classList.toggle('on',on);
-  document.getElementById('dotLive2').classList.toggle('on',on);
+  // Nota: estos elementos viven dentro de .preview-col, que se reemplaza
+  // temporalmente por el panel de versículos al usar la sección Biblia.
+  // Si no están presentes ahora mismo, simplemente no hay nada que actualizar.
+  const badge=document.getElementById('liveBadge'); if(badge) badge.classList.toggle('on',on);
+  const text=document.getElementById('liveText'); if(text) text.textContent=on?'EN VIVO':'SIN SEÑAL';
+  const dot=document.getElementById('dotLive'); if(dot) dot.classList.toggle('on',on);
+  const dot2=document.getElementById('dotLive2'); if(dot2) dot2.classList.toggle('on',on);
 }
 
 function renderPreview(){
   const frame=document.getElementById('projFrame');
   const slideNav=document.getElementById('slideNav');
+  if(!frame||!slideNav) return; // panel de proyección no visible ahora (p.ej. estamos en Biblia)
   if(!state.liveRef){ frame.innerHTML='<span class="ph-text">Nada en proyección</span>'; slideNav.classList.add('hidden'); return; }
   const{collection,snapshot,slideIndex}=state.liveRef;
   const kind=kindForCollection(collection);
@@ -795,32 +857,33 @@ function renderPreview(){
   else slideNav.classList.add('hidden');
 }
 
-document.getElementById('btnPrevSlide').addEventListener('click',()=>{
+// Reutilizables: botón local, botones móviles y control remoto los llaman a todos.
+function goPrevSlide(){
   if(!state.liveRef)return;
   state.liveRef.slideIndex=Math.max(0,state.liveRef.slideIndex-1);
   sendCurrentSlide(); renderPreview();
-});
-document.getElementById('btnNextSlide').addEventListener('click',()=>{
+}
+function goNextSlide(){
   if(!state.liveRef)return;
   const kind=kindForCollection(state.liveRef.collection);
   const max=kind==='song'?songDisplaySlides(state.liveRef.snapshot).length-1:0;
   state.liveRef.slideIndex=Math.min(max,state.liveRef.slideIndex+1);
   sendCurrentSlide(); renderPreview();
-});
+}
+document.getElementById('btnPrevSlide').addEventListener('click',goPrevSlide);
+document.getElementById('btnNextSlide').addEventListener('click',goNextSlide);
 
 channel.onmessage=e=>{ if(e.data&&e.data.type==='request-state') sendCurrentSlide(); };
 
 // Tema y fuente
-let _projThemeApplied=false;
-document.getElementById('btnToggleTheme').addEventListener('click',()=>{
+function toggleProjTheme(){
   projTheme=projTheme==='dark'?'light':'dark';
-  document.getElementById('btnToggleTheme').textContent=projTheme==='dark'?'☀️ Fondo blanco':'🌙 Fondo negro';
+  const btn=document.getElementById('btnToggleTheme'); if(btn) btn.textContent=projTheme==='dark'?'☀️ Fondo blanco':'🌙 Fondo negro';
   channel.postMessage({type:'theme',theme:projTheme});
-  // Actualizar preview frame
-  const frame=document.getElementById('projFrame');
-  frame.style.background=projTheme==='light'?'#fff':'#000';
+  const frame=document.getElementById('projFrame'); if(frame) frame.style.background=projTheme==='light'?'#fff':'#000';
   renderPreview();
-});
+}
+document.getElementById('btnToggleTheme').addEventListener('click',toggleProjTheme);
 document.getElementById('projFont').addEventListener('change',e=>{
   projFont=e.target.value;
   channel.postMessage({type:'settings',font:projFont,size:projSize});
@@ -944,8 +1007,8 @@ function updateMobileProjBar(){
   if(kind==='song'){ const total=songDisplaySlides(state.liveRef.snapshot).length; counter.textContent=`${state.liveRef.slideIndex+1}/${total}`; }
   else counter.textContent='1/1';
 }
-document.getElementById('btnPrevSlideMobile').addEventListener('click',()=>document.getElementById('btnPrevSlide').click());
-document.getElementById('btnNextSlideMobile').addEventListener('click',()=>document.getElementById('btnNextSlide').click());
+document.getElementById('btnPrevSlideMobile').addEventListener('click',goPrevSlide);
+document.getElementById('btnNextSlideMobile').addEventListener('click',goNextSlide);
 document.getElementById('btnClearMobile').addEventListener('click',clearProjection);
 
 // ── CONTROL REMOTO MQTT ──
@@ -995,8 +1058,12 @@ function publishRemoteState(){
 
 function handleRemoteMessage(msg){
   if(msg.type!=='cmd')return;
-  if(msg.action==='prev') document.getElementById('btnPrevSlide').click();
-  else if(msg.action==='next') document.getElementById('btnNextSlide').click();
+  // Nota: estas acciones pueden llegar en cualquier momento (p.ej. mientras
+  // la pantalla local está en la sección Biblia, con el panel de proyección
+  // reemplazado por el de versículos), así que nunca dependen de que un
+  // botón concreto exista en el DOM en ese instante.
+  if(msg.action==='prev') goPrevSlide();
+  else if(msg.action==='next') goNextSlide();
   else if(msg.action==='clear') clearProjection();
   else if(msg.action==='project'&&msg.collection&&msg.refId){
     if(msg.collection==='biblia'&&msg.biblePayload){
@@ -1008,13 +1075,9 @@ function handleRemoteMessage(msg){
     }
   }
   else if(msg.action==='request-state') publishRemoteState();
-  else if(msg.action==='audio-play'){
-    if(state.audio.el.paused){ state.audio.el.play(); document.getElementById('btnAudioPlay').textContent='⏸'; }
-    else{ state.audio.el.pause(); document.getElementById('btnAudioPlay').textContent='▶'; }
-    publishRemoteState();
-  }
-  else if(msg.action==='audio-next') document.getElementById('btnAudioNext').click();
-  else if(msg.action==='audio-prev') document.getElementById('btnAudioPrev').click();
+  else if(msg.action==='audio-play'){ toggleAudioPlay(); publishRemoteState(); }
+  else if(msg.action==='audio-next') audioNext();
+  else if(msg.action==='audio-prev') audioRestart();
   else if(msg.action==='audio-select'&&typeof msg.index==='number') playAudioAt(msg.index);
   else if(msg.action==='audio-seek'&&typeof msg.ratio==='number'){
     if(state.audio.el.duration){ state.audio.el.currentTime=msg.ratio*state.audio.el.duration; publishRemoteState(); }
@@ -1044,112 +1107,6 @@ document.getElementById('btnRemoteControl').addEventListener('click',()=>{
   overlay.addEventListener('click',e=>{ if(e.target===overlay){ overlay.remove(); document.getElementById('btnRemoteControl').classList.remove('active'); } });
   document.getElementById('btnRemoteControl').classList.add('active');
 });
-
-// ── PANEL DERECHO EN MODO BIBLIA ──
-let _origPreviewColHTML = '';
-
-function _setupBibleRightPanel() {
-  const prevCol = document.querySelector('.preview-col');
-  // Guardar HTML original si no lo hemos guardado aún
-  if (!_origPreviewColHTML) _origPreviewColHTML = prevCol.innerHTML;
-  // Reemplazar contenido con panel de versículos
-  prevCol.innerHTML = `
-    <div class="preview-head">
-      <h2>Versículos</h2>
-      <span style="font-size:10px;color:var(--text-faint);" id="bibleVerseLabel">—</span>
-    </div>
-    <div id="bibleRightVerseList" style="flex:1;overflow-y:auto;padding:4px 8px;min-height:0;"></div>
-    <div class="bible-proj-bar" id="bibleRightProjBar" style="flex-shrink:0;"></div>`;
-  _paintBibleRightEmpty();
-}
-
-function _paintBibleRightEmpty() {
-  const list = document.getElementById('bibleRightVerseList');
-  const bar = document.getElementById('bibleRightProjBar');
-  const label = document.getElementById('bibleVerseLabel');
-  if (!list) return;
-  if (label) label.textContent = '—';
-  list.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:12.5px;text-align:center;padding:20px;">Selecciona un capítulo para ver los versículos</div>';
-  if (bar) bar.innerHTML = '';
-}
-
-function paintBibleRightVerses(book, bd) {
-  const list = document.getElementById('bibleRightVerseList');
-  const bar = document.getElementById('bibleRightProjBar');
-  const label = document.getElementById('bibleVerseLabel');
-  if (!list || !bar) return;
-
-  const verses = bible.getChapter(bibleState.bookIndex, bibleState.chapterIndex);
-  if (label) label.textContent = book.name + ' ' + (bibleState.chapterIndex + 1);
-
-  function paintVerses() {
-    list.innerHTML = '';
-    verses.forEach((text, i) => {
-      const isSel = bibleState.selectedVerses.has(i);
-      const isDim = !isSel && bibleState.selectedVerses.size >= MAX_VERSES;
-      const item = el(`
-        <div class="bible-verse-item ${isSel?'selected':''} ${isDim?'disabled':''}">
-          <span class="bible-verse-num">${i+1}</span>
-          <span class="bible-verse-text">${esc(text)}</span>
-        </div>`);
-      item.addEventListener('click', () => {
-        if (isDim) return;
-        if (bibleState.selectedVerses.has(i)) bibleState.selectedVerses.delete(i);
-        else { if (bibleState.selectedVerses.size >= MAX_VERSES) return; bibleState.selectedVerses.add(i); }
-        paintVerses(); paintBar();
-      });
-      list.appendChild(item);
-    });
-  }
-
-  function paintBar() {
-    const count = bibleState.selectedVerses.size;
-    bar.innerHTML = `
-      <div class="bible-sel-counter"><span style="color:var(--amber);font-weight:700;">${count}</span>/${MAX_VERSES} versículos</div>
-      <div style="display:flex;gap:6px;">
-        <button class="btn btn-ghost btn-sm" id="bRightAddList">+ Lista</button>
-        <button class="bible-proj-action" id="bRightProj" ${count===0?'disabled':''}>
-          ${count>0?'Proyectar ('+count+')':'Proyectar'}
-        </button>
-      </div>`;
-    bar.querySelector('#bRightProj').addEventListener('click', () => {
-      if (!bibleState.selectedVerses.size) return;
-      projectBibleSelection();
-    });
-    bar.querySelector('#bRightAddList').addEventListener('click', () => {
-      if (!bibleState.selectedVerses.size) { toast('Selecciona al menos un versículo.'); return; }
-      const payload = buildBiblePayload();
-      const lst = getCurrentList();
-      if (!lst) { toast('Crea una lista de servicio primero.'); return; }
-      lst.items.push({ type:'citas', refId:'bible-'+uid(), title:payload.reference, biblePayload:payload });
-      storage.saveList(lst).then(() => { renderTimeline(); toast('Añadido a la lista.'); });
-    });
-  }
-
-  paintVerses(); paintBar();
-}
-
-function _reattachPreviewEvents() {
-  // Reatachar eventos del panel derecho después de restaurar
-  const btnClear = document.getElementById('btnClearProj');
-  if (btnClear) btnClear.addEventListener('click', clearProjection);
-  const btnOpen = document.getElementById('btnOpenProjector');
-  if (btnOpen) btnOpen.addEventListener('click', openProjectorWindow);
-  const btnTheme = document.getElementById('btnToggleTheme');
-  if (btnTheme) btnTheme.addEventListener('click', () => {
-    projTheme = projTheme==='dark'?'light':'dark';
-    btnTheme.textContent = projTheme==='dark'?'☀️ Fondo blanco':'🌙 Fondo negro';
-    const frame = document.getElementById('projFrame');
-    if (frame) frame.style.background = projTheme==='light'?'#fff':'#000';
-    channel.postMessage({type:'theme',theme:projTheme});
-    renderPreview();
-  });
-  const projFont = document.getElementById('projFont');
-  if (projFont) projFont.addEventListener('change', e => { projFont_val = e.target.value; channel.postMessage({type:'settings',font:projFont_val,size:projSize}); });
-  const projSize = document.getElementById('projSize');
-  if (projSize) projSize.addEventListener('change', e => { projSize = e.target.value; channel.postMessage({type:'settings',font:projFont,size:projSize}); });
-  renderPreview(); updateLiveBadge(!!state.liveRef);
-}
 
 // ── ACERCA DE / LICENCIA ──
 document.getElementById('btnAbout').addEventListener('click', () => {
